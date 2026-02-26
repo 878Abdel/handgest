@@ -1,0 +1,340 @@
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: 'Courier New', 'Consolas', monospace;
+  font-size: 11px;
+}
+
+/* Vidéo & Canvas */
+.video-feed {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  display: none;
+}
+
+.canvas-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5;
+}
+
+/* Curseur - Très précis */
+.cursor {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.05s;
+  box-shadow: 0 0 3px rgba(255, 255, 255, 0.8);
+}
+
+.cursor.active {
+  opacity: 1;
+}
+
+.cursor.pinch {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 1);
+}
+
+/* Indicateur pincement */
+.pinch-indicator {
+  position: fixed;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0;
+}
+
+.pinch-indicator.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Panel style Windows */
+.panel {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: 240px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  z-index: 10000;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Barre titre Windows */
+.status {
+  padding: 2px 4px;
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  font-weight: bold;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Contenu fenêtre */
+.info {
+  padding: 8px;
+  background: #c0c0c0;
+  color: #000;
+  line-height: 1.8;
+}
+
+.info div {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid #808080;
+}
+
+.info strong {
+  color: #000;
+}
+
+.info span {
+  color: #000;
+  font-weight: bold;
+}
+
+/* Contrôles */
+.controls {
+  padding: 8px;
+  background: #c0c0c0;
+  border-top: 1px solid #fff;
+  border-bottom: 1px solid #808080;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  color: #000;
+  cursor: pointer;
+}
+
+.controls input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+/* Bouton Windows */
+.btn {
+  width: 100%;
+  padding: 6px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  margin: 8px 0;
+}
+
+.btn:active {
+  border-color: #000 #fff #fff #000;
+  padding: 7px 5px 5px 7px;
+}
+
+/* Output log */
+.output {
+  padding: 6px;
+  background: #fff;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  color: #000;
+  font-size: 9px;
+  max-height: 60px;
+  overflow-y: auto;
+  margin: 8px;
+}
+
+.output div {
+  padding: 1px 0;
+  font-family: 'Courier New', monospace;
+}
+
+/* Fenêtres Windows 95 */
+.window {
+  position: absolute;
+  width: 280px;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+  z-index: 10;
+}
+
+.window-title {
+  background: linear-gradient(to right, #000080, #1084d0);
+  color: #fff;
+  padding: 4px 6px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.window-controls {
+  display: flex;
+  gap: 2px;
+}
+
+.win-btn {
+  width: 16px;
+  height: 14px;
+  background: #c0c0c0;
+  border: 1px solid;
+  border-color: #fff #000 #000 #fff;
+  color: #000;
+  font-size: 9px;
+  line-height: 10px;
+  padding: 0;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.1s;
+}
+
+.win-btn:hover,
+.win-btn.hover {
+  background: #d4d4d4;
+}
+
+.win-btn:active {
+  border-color: #000 #fff #fff #000;
+}
+
+.window-body {
+  padding: 12px;
+}
+
+/* Boutons interactifs */
+.interactive-btn {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0;
+  background: #c0c0c0;
+  border: 2px solid;
+  border-color: #fff #000 #000 #fff;
+  color: #000;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.interactive-btn:hover,
+.interactive-btn.hover {
+  background: #d4d4d4;
+  box-shadow: 0 0 4px rgba(255, 255, 0, 0.6);
+}
+
+.interactive-btn:active,
+.interactive-btn.clicked {
+  border-color: #000 #fff #fff #000;
+  padding: 9px 7px 7px 9px;
+  background: #b0b0b0;
+}
+
+/* Zone de défilement */
+.scroll-area {
+  height: 250px;
+  overflow-y: auto;
+  background: #fff;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  padding: 8px;
+  color: #000;
+}
+
+.scroll-content {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.scroll-content h3 {
+  margin: 12px 0 6px 0;
+  font-size: 12px;
+  color: #000080;
+}
+
+.scroll-content p,
+.scroll-content ul {
+  margin: 4px 0;
+}
+
+.scroll-content li {
+  margin-left: 20px;
+}
+
+/* Log d'actions */
+.action-log {
+  margin-top: 12px;
+  padding: 8px;
+  background: #fff;
+  border: 2px solid;
+  border-color: #808080 #fff #fff #808080;
+  min-height: 60px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-size: 9px;
+  color: #000;
+  font-family: 'Courier New', monospace;
+}
+
+/* Checkbox personnalisés */
+.interactive-check {
+  margin-right: 6px;
+}
+
+.window-body label {
+  display: block;
+  margin: 8px 0;
+  color: #000;
+  cursor: pointer;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .panel {
+    width: 200px;
+    font-size: 10px;
+  }
+  
+  .cursor {
+    width: 12px;
+    height: 12px;
+  }
+}

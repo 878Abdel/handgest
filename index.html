@@ -1,954 +1,118 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <title>GestureOS - Ultra Fluide</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
-      color: #fff;
-      overflow: hidden;
-      height: 100vh;
-      width: 100vw;
-    }
-    
-    #video { display: none; }
-    
-    .cursor {
-      position: fixed;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 10000;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: box-shadow 0.05s;
-    }
-    
-    @media (max-width: 768px) {
-      .cursor {
-        width: 32px;
-        height: 32px;
-        font-size: 12px;
-      }
-    }
-    
-    @media (min-width: 769px) {
-      .cursor {
-        width: 25px;
-        height: 25px;
-        font-size: 10px;
-      }
-    }
-    
-    .cursor.left {
-      background: radial-gradient(circle, #FF4444, rgba(255, 68, 68, 0.2));
-      color: #FF4444;
-      box-shadow: 0 0 12px #FF4444;
-    }
-    
-    .cursor.right {
-      background: radial-gradient(circle, #4444FF, rgba(68, 68, 255, 0.2));
-      color: #4444FF;
-      box-shadow: 0 0 12px #4444FF;
-    }
-    
-    .cursor.pinching {
-      box-shadow: 0 0 25px currentColor;
-    }
-    
-    .window {
-      position: fixed;
-      background: rgba(20, 30, 60, 0.95);
-      border: 2px solid rgba(255, 107, 107, 0.5);
-      border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      min-width: 280px;
-      min-height: 180px;
-      display: flex;
-      flex-direction: column;
-      z-index: 100;
-      max-width: 95vw;
-      max-height: 90vh;
-    }
-    
-    @media (max-width: 768px) {
-      .window {
-        min-width: 250px;
-        min-height: 150px;
-        border-radius: 8px;
-      }
-    }
-    
-    .window.active {
-      border-color: #ff6b6b;
-      box-shadow: 0 8px 32px rgba(255, 107, 107, 0.4);
-    }
-    
-    .window-header {
-      background: linear-gradient(90deg, #ff6b6b, #ff9999);
-      padding: 12px;
-      cursor: move;
-      user-select: none;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-radius: 10px 10px 0 0;
-      color: white;
-      font-weight: bold;
-      font-size: 14px;
-    }
-    
-    @media (max-width: 768px) {
-      .window-header {
-        padding: 10px;
-        font-size: 12px;
-      }
-    }
-    
-    .window-content {
-      flex: 1;
-      padding: 15px;
-      overflow-y: auto;
-      background: rgba(15, 20, 50, 0.8);
-      font-size: 13px;
-    }
-    
-    @media (max-width: 768px) {
-      .window-content {
-        padding: 10px;
-        font-size: 12px;
-      }
-    }
-    
-    .contextMenu {
-      position: fixed;
-      background: rgba(30, 40, 70, 0.95);
-      border: 2px solid #ff6b6b;
-      border-radius: 8px;
-      padding: 8px 0;
-      display: none;
-      z-index: 11000;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
-      min-width: 150px;
-    }
-    
-    .contextMenu.show {
-      display: block;
-    }
-    
-    .contextMenu-item {
-      padding: 10px 15px;
-      cursor: pointer;
-      transition: background 0.15s;
-      border-left: 3px solid transparent;
-      font-size: 13px;
-    }
-    
-    @media (max-width: 768px) {
-      .contextMenu-item {
-        padding: 12px 15px;
-        font-size: 14px;
-      }
-    }
-    
-    .contextMenu-item:hover {
-      background: rgba(255, 107, 107, 0.3);
-      border-left-color: #ff6b6b;
-    }
-    
-    .button {
-      background: linear-gradient(135deg, #ff6b6b, #ff9999);
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: transform 0.1s;
-      font-size: 13px;
-    }
-    
-    @media (max-width: 768px) {
-      .button {
-        padding: 12px 20px;
-        font-size: 14px;
-      }
-    }
-    
-    .button:active {
-      transform: scale(0.95);
-    }
-    
-    #status {
-      position: fixed;
-      bottom: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 8px 10px;
-      border-radius: 6px;
-      font-size: 10px;
-      color: #4CAF50;
-      font-family: monospace;
-      z-index: 9999;
-      max-width: 200px;
-    }
-    
-    @media (max-width: 768px) {
-      #status {
-        font-size: 11px;
-        padding: 6px 8px;
-        bottom: 5px;
-        left: 5px;
-        right: 5px;
-        max-width: none;
-      }
-    }
-    
-    .textInput {
-      background: rgba(50, 50, 100, 0.8);
-      border: 2px solid #ff6b6b;
-      color: white;
-      padding: 8px;
-      border-radius: 6px;
-      margin: 5px 0;
-      font-size: 12px;
-      width: 100%;
-    }
-    
-    @media (max-width: 768px) {
-      .textInput {
-        font-size: 14px;
-        padding: 10px;
-      }
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hand Tracking</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
 </head>
 <body>
-  <video id="video" style="display: none;"></video>
-  <div id="cursor-left" class="cursor left">L</div>
-  <div id="cursor-right" class="cursor right">R</div>
+  <video id="video" class="video-feed"></video>
+  <canvas id="canvas" class="canvas-overlay"></canvas>
   
-  <div id="window-1" class="window" style="left: 10px; top: 10px; width: 320px;">
-    <div class="window-header">📝 Document</div>
-    <div class="window-content">
-      <p>Pinch Thumb+Index = Clic</p>
-      <p>Pinch Thumb+Majeur = Menu</p>
-      <p>Pinch + scroll = Scroll</p>
-      <textarea class="textInput" placeholder="Texte..." rows="3"></textarea>
-      <button class="button">OK</button>
+  <div id="cursor" class="cursor"></div>
+  <div id="pinchIndicator" class="pinch-indicator"></div>
+  
+  <!-- Fenêtre 1: Boutons -->
+  <div class="window" id="window1" style="left: 50px; top: 50px;">
+    <div class="window-title">
+      <span>🖱️ Contrôles</span>
+      <div class="window-controls">
+        <button class="win-btn">_</button>
+        <button class="win-btn">□</button>
+        <button class="win-btn">✕</button>
+      </div>
+    </div>
+    <div class="window-body">
+      <button class="interactive-btn" data-action="like">👍 J'aime</button>
+      <button class="interactive-btn" data-action="dislike">👎 Pas aimer</button>
+      <button class="interactive-btn" data-action="share">🔗 Partager</button>
+      <button class="interactive-btn" data-action="save">💾 Sauvegarder</button>
+      <div class="action-log" id="actionLog"></div>
+    </div>
+  </div>
+
+  <!-- Fenêtre 2: Défilement -->
+  <div class="window" id="window2" style="left: 350px; top: 50px;">
+    <div class="window-title">
+      <span>📜 Contenu</span>
+      <div class="window-controls">
+        <button class="win-btn">_</button>
+        <button class="win-btn">□</button>
+        <button class="win-btn">✕</button>
+      </div>
+    </div>
+    <div class="window-body">
+      <div class="scroll-area" id="scrollArea">
+        <div class="scroll-content">
+          <h3>Bienvenue!</h3>
+          <p>Utilisez vos gestes pour interagir:</p>
+          <ul>
+            <li>👆 Déplacez votre index pour bouger le curseur</li>
+            <li>🤏 Pincez pouce-index pour cliquer</li>
+            <li>🤏↕️ Pincez + montez/descendez pour défiler</li>
+          </ul>
+          <h3>Fonctionnalités</h3>
+          <p>✓ Détection main en temps réel</p>
+          <p>✓ Curseur fluide avec smoothing</p>
+          <p>✓ Gestes précis (seuil 35px)</p>
+          <p>✓ Interface Windows 95</p>
+          <h3>Performance</h3>
+          <p>FPS tracking actif</p>
+          <p>MediaPipe optimisé</p>
+          <p>Résolution 1280x720</p>
+          <h3>Compatibilité</h3>
+          <p>Desktop: caméra frontale</p>
+          <p>Mobile: caméra arrière</p>
+          <h3>Plus de contenu...</h3>
+          <p>Ligne 1</p><p>Ligne 2</p><p>Ligne 3</p>
+          <p>Ligne 4</p><p>Ligne 5</p><p>Ligne 6</p>
+          <p>Ligne 7</p><p>Ligne 8</p><p>Ligne 9</p>
+          <p>Ligne 10</p><p>Ligne 11</p><p>Ligne 12</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fenêtre 3: Formulaire -->
+  <div class="window" id="window3" style="left: 650px; top: 50px;">
+    <div class="window-title">
+      <span>✏️ Options</span>
+      <div class="window-controls">
+        <button class="win-btn">_</button>
+        <button class="win-btn">□</button>
+        <button class="win-btn">✕</button>
+      </div>
+    </div>
+    <div class="window-body">
+      <label><input type="checkbox" class="interactive-check" id="opt1" checked> Option A</label>
+      <label><input type="checkbox" class="interactive-check" id="opt2"> Option B</label>
+      <label><input type="checkbox" class="interactive-check" id="opt3"> Option C</label>
+      <div style="margin-top: 10px;">
+        <button class="interactive-btn" data-action="submit">✓ Valider</button>
+        <button class="interactive-btn" data-action="reset">✕ Annuler</button>
+      </div>
     </div>
   </div>
   
-  <div id="window-2" class="window" style="left: 340px; top: 80px; width: 300px;">
-    <div class="window-header">🖼️ Galerie</div>
-    <div class="window-content">
-      <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100'%3E%3Crect fill='url(%23grad)' width='100%25' height='100'/%3E%3Cdefs%3E%3ClinearGradient id='grad'%3E%3Cstop offset='0%25' stop-color='%23ff6b6b'/%3E%3Cstop offset='100%25' stop-color='%23ff9999'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ctext x='50%25' y='50%25' font-size='40' text-anchor='middle' dy='.3em' fill='white'%3E🎨%3C/text%3E%3C/svg%3E" style="width: 100%; border-radius: 4px;">
-      <p>Clic droit = Options</p>
+  <div class="panel">
+    <div class="status" id="status">Initialisation...</div>
+    <div class="info">
+      <div><strong>Position:</strong> <span id="pos">--</span></div>
+      <div><strong>Pincement:</strong> <span id="pinch">--</span>px</div>
+      <div><strong>État:</strong> <span id="state">Repos</span></div>
+      <div><strong>Caméra:</strong> <span id="camera">--</span></div>
     </div>
-  </div>
-  
-  <div id="window-3" class="window" style="left: 670px; top: 150px; width: 280px;">
-    <div class="window-header">⚡ Info</div>
-    <div class="window-content" style="font-size: 11px; line-height: 1.5;">
-      <div>✅ Caméra DISTANCE</div>
-      <div>✅ Deux mains = Dual cursor</div>
-      <div>✅ Mode MOBILE optimisé</div>
-      <div style="margin-top: 8px; opacity: 0.7;">iPhone tête bêche prêt!</div>
+    <div class="controls">
+      <label><input type="checkbox" id="showLandmarks" checked> Landmarks</label>
+      <label><input type="checkbox" id="showConnections" checked> Connexions</label>
     </div>
-  </div>
-  
-  <div id="contextMenu" class="contextMenu">
-    <div class="contextMenu-item">✏️ Éditer</div>
-    <div class="contextMenu-item">📋 Copier</div>
-    <div class="contextMenu-item">📌 Coller</div>
-    <hr style="opacity: 0.2; margin: 5px 0;">
-    <div class="contextMenu-item">🗑️ Supprimer</div>
-  </div>
-  
-  <div id="status">⏳ Initialisation...</div>
-
-  <script>
-    // ===== DÉTECTION MOBILE =====
-    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    // ===== VARIABLES =====
-    var video = document.getElementById('video');
-    var cursorLeft = document.getElementById('cursor-left');
-    var cursorRight = document.getElementById('cursor-right');
-    var status = document.getElementById('status');
-    var contextMenu = document.getElementById('contextMenu');
-    
-    var handPositions = { left: null, right: null };
-    var lastClickTime = { left: 0, right: 0 };
-    var isPinching = { left: false, right: false, middle: false };
-    var draggedWindow = null;
-    var dragOffset = { x: 0, y: 0, handIndex: -1 };
-    var scrollStartY = { left: null, right: null };
-    
-    // ===== FONCTIONS =====
-    function distance(p1, p2) {
-      var dx = p1.x - p2.x;
-      var dy = p1.y - p2.y;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-    
-    // Index+Thumb = Clic gauche
-    function isLeftClick(landmarks) {
-      var thumb = landmarks[4];
-      var index = landmarks[8];
-      return distance(thumb, index) < 0.05;
-    }
-    
-    // Middle+Thumb = Clic droit
-    function isRightClick(landmarks) {
-      var thumb = landmarks[4];
-      var middle = landmarks[12];
-      return distance(thumb, middle) < 0.05;
-    }
-    
-    // Get Y pour scroll
-    function getScrollY(landmarks) {
-      var index = landmarks[8];
-      var middle = landmarks[12];
-      return (index.y + middle.y) / 2;
-    }
-    
-    function run(res) {
-      if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-        cursorLeft.style.display = 'none';
-        cursorRight.style.display = 'none';
-        status.textContent = isMobile ? '📱 Pas de main' : '❌ Pas de main';
-        return;
-      }
-      
-      status.textContent = `✅ ${res.multiHandLandmarks.length}🖐️ | ${isMobile ? '📱' : '🖥️'}`;
-      var hands = res.multiHandLandmarks;
-      
-      for (var i = 0; i < hands.length; i++) {
-        var lm = hands[i];
-        var index = lm[8];
-        var w = window.innerWidth;
-        var h = window.innerHeight;
-        
-        var x = (1 - index.x) * w;
-        var y = index.y * h;
-        
-        var hand = (i === 0) ? 'left' : 'right';
-        var cursor = (hand === 'left') ? cursorLeft : cursorRight;
-        
-        // Smooth cursor
-        if (handPositions[hand] === null) {
-          handPositions[hand] = { x: x, y: y };
-        } else {
-          handPositions[hand].x += (x - handPositions[hand].x) * 0.12;
-          handPositions[hand].y += (y - handPositions[hand].y) * 0.12;
-        }
-        
-        var sx = handPositions[hand].x;
-        var sy = handPositions[hand].y;
-        
-        cursor.style.display = 'block';
-        cursor.style.left = (sx - (isMobile ? 16 : 12.5)) + 'px';
-        cursor.style.top = (sy - (isMobile ? 16 : 12.5)) + 'px';
-        
-        var now = Date.now();
-        var leftClick = isLeftClick(lm);
-        var rightClick = isRightClick(lm);
-        var scrollY = getScrollY(lm);
-        var handIndex = i;
-        
-        // ===== CLIC GAUCHE =====
-        if (leftClick) {
-          cursor.style.background = 'radial-gradient(circle, #FFD700, rgba(255, 215, 0, 0.5))';
-          cursor.style.boxShadow = '0 0 20px #FFD700';
-          
-          if (!isPinching.left && now - lastClickTime.left > 150) {
-            isPinching.left = true;
-            lastClickTime.left = now;
-            scrollStartY[hand] = scrollY;
-            
-            var element = document.elementFromPoint(sx, sy);
-            if (element) {
-              var header = element.closest('.window-header');
-              if (header) {
-                draggedWindow = header.closest('.window');
-                dragOffset.handIndex = handIndex;
-                var rect = draggedWindow.getBoundingClientRect();
-                dragOffset.x = rect.left - sx;
-                dragOffset.y = rect.top - sy;
-              } else {
-                var clickEvent = new MouseEvent('click', {
-                  clientX: sx,
-                  clientY: sy,
-                  bubbles: true,
-                  cancelable: true
-                });
-                element.dispatchEvent(clickEvent);
-              }
-            }
-          }
-          
-          if (draggedWindow && dragOffset.handIndex === handIndex) {
-            draggedWindow.style.left = (sx + dragOffset.x) + 'px';
-            draggedWindow.style.top = (sy + dragOffset.y) + 'px';
-          }
-          
-          if (scrollStartY[hand] !== null) {
-            var delta = scrollY - scrollStartY[hand];
-            if (Math.abs(delta) > 0.03) {
-              var target = document.elementFromPoint(sx, sy);
-              var scrollable = target ? target.closest('.window-content') : null;
-              if (scrollable) {
-                scrollable.scrollTop += (delta > 0 ? 25 : -25);
-              }
-              scrollStartY[hand] = scrollY;
-            }
-          }
-        } else {
-          if (isPinching.left) {
-            draggedWindow = null;
-            scrollStartY[hand] = null;
-          }
-          isPinching.left = false;
-        }
-        
-        // ===== CLIC DROIT =====
-        if (rightClick) {
-          cursor.style.background = 'radial-gradient(circle, #4444FF, rgba(68, 68, 255, 0.5))';
-          cursor.style.boxShadow = '0 0 20px #4444FF';
-          
-          if (!isPinching.middle && now - lastClickTime.right > 150) {
-            isPinching.middle = true;
-            lastClickTime.right = now;
-            
-            contextMenu.classList.add('show');
-            contextMenu.style.left = (sx + 10) + 'px';
-            contextMenu.style.top = (sy + 10) + 'px';
-          }
-        } else {
-          if (isPinching.middle) {
-            contextMenu.classList.remove('show');
-          }
-          isPinching.middle = false;
-        }
-        
-        // Défaut
-        if (!leftClick && !rightClick) {
-          if (hand === 'left' && !isPinching.left) {
-            cursor.style.background = 'radial-gradient(circle, #FF4444, rgba(255, 68, 68, 0.3))';
-            cursor.style.boxShadow = '0 0 15px #FF4444';
-          } else if (hand === 'right' && !isPinching.right) {
-            cursor.style.background = 'radial-gradient(circle, #4444FF, rgba(68, 68, 255, 0.3))';
-            cursor.style.boxShadow = '0 0 15px #4444FF';
-          }
-        }
-      }
-      
-      if (hands.length < 2) {
-        cursorRight.style.display = 'none';
-      }
-    }
-    
-    // ===== CONTEXT MENU =====
-    contextMenu.querySelectorAll('.contextMenu-item').forEach(item => {
-      item.addEventListener('click', function() {
-        alert('✂️ ' + this.textContent);
-        contextMenu.classList.remove('show');
-      });
-    });
-    
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.contextMenu') && !e.target.closest('.cursor')) {
-        contextMenu.classList.remove('show');
-      }
-    });
-    
-    // ===== MEDIAPIPE =====
-    var hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-    
-    hands.setOptions({
-      maxNumHands: 2,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
-    
-    hands.onResults(run);
-    
-    // ===== CAMERA SETUP =====
-    try {
-      var cameraConfig = {
-        onFrame: async () => { await hands.send({image: video}); },
-        width: 640,
-        height: 480
-      };
-      
-      // Caméra arrière pour MOBILE
-      if (isMobile) {
-        cameraConfig.facingMode = 'environment';
-      }
-      
-      var cam = new Camera(video, cameraConfig);
-      cam.start();
-      
-      setTimeout(() => {
-        var mode = isMobile ? '📱 CAMÉRA ARRIÈRE' : '🖥️ Caméra Desktop';
-        status.textContent = '✅ ' + mode;
-      }, 1200);
-    } catch (err) {
-      status.textContent = '⚠️ Erreur caméra: ' + err.message;
-    }
-  </script>
-</body>
-</html>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: Arial, sans-serif; 
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-      color: #fff;
-      padding: 20px;
-    }
-    .container { max-width: 1200px; margin: 0 auto; }
-    h1 { text-align: center; margin-bottom: 10px; color: #ff6b6b; font-size: 32px; }
-    
-    #status { 
-      background: rgba(255, 107, 107, 0.8); 
-      color: white; 
-      padding: 12px; 
-      border-radius: 8px; 
-      margin-bottom: 20px;
-      text-align: center;
-      font-size: 16px;
-      font-weight: bold;
-    }
-    
-    .instructions {
-      background: rgba(255, 255, 255, 0.1);
-      border-left: 4px solid #ff6b6b;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 5px;
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    
-    #gestureDebug {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      color: #4CAF50;
-      font-family: monospace;
-      z-index: 10000;
-      max-width: 250px;
-    }
-    
-    .catalog {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 16px;
-      padding: 20px;
-      background: rgba(0, 0, 0, 0.3);
-      border-radius: 12px;
-      overflow-y: auto;
-      max-height: 70vh;
-    }
-    
-    .movie-card {
-      background: linear-gradient(135deg, #0f3460 0%, #16213e 100%);
-      border-radius: 8px;
-      overflow: hidden;
-      cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
-      border: 1px solid rgba(255, 107, 107, 0.3);
-    }
-    
-    .movie-card:hover {
-      transform: translateY(-8px);
-      box-shadow: 0 8px 24px rgba(255, 107, 107, 0.4);
-    }
-    
-    .poster {
-      width: 100%;
-      height: 200px;
-      background: linear-gradient(135deg, #ff6b6b 0%, #ff9999 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 48px;
-      font-weight: bold;
-    }
-    
-    .movie-info {
-      padding: 12px;
-    }
-    
-    .movie-title {
-      font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 6px;
-      color: #ff6b6b;
-    }
-    
-    .movie-rating {
-      font-size: 12px;
-      color: #ffd700;
-    }
-    
-    #result {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.9);
-      padding: 15px 20px;
-      border-radius: 8px;
-      display: none;
-      z-index: 1000;
-      border-left: 4px solid #ff6b6b;
-    }
-    
-    #cursor {
-      position: fixed;
-      width: 30px;
-      height: 30px;
-      background: radial-gradient(circle, #ff6b6b, rgba(255, 107, 107, 0.3));
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 9999;
-      display: none;
-      box-shadow: 0 0 20px #ff6b6b;
-    }
-  </style>
-</head>
-<body>
-  <video id="vid" style="display: none;"></video>
-  <div id="cursor"></div>
-  <div id="gestureDebug">⏳ Initialisation...</div>
-  
-  <div class="container">
-    <h1>🎬 GestureFlix - Gesture Control Pro</h1>
-    <div id="status">⏳ Initialisation de la caméra...</div>
-    
-    <div class="instructions">
-      <strong>🖐️ Contrôles gestuels optimisés:</strong><br>
-      <strong style="color: #FFD700;">👆 Clic:</strong> Pincez POUCE + INDEX (une ou deux mains)<br>
-      <strong style="color: #4CAF50;">✌️ Scroll:</strong> Levez INDEX + MAJEUR (geste peace) et bougez haut/bas<br>
-      <strong style="color: #00BCD4;">🤲 Zoom:</strong> Deux mains - INDEX des deux mains écartés/rapprochés
-    </div>
-    
-    <div class="catalog" id="catalog">
-      <!-- Les cartes de films seront générées ici -->
-    </div>
-    
-    <div id="result"></div>
+    <button id="testBtn" class="btn">TESTER PINCEMENT</button>
+    <div id="output" class="output"></div>
   </div>
 
-  <script>
-    var vid = document.getElementById('vid');
-    var cursor = document.getElementById('cursor');
-    var status = document.getElementById('status');
-    var catalog = document.getElementById('catalog');
-    var result = document.getElementById('result');
-    var gestureDebug = document.getElementById('gestureDebug');
-    
-    var sx = null, sy = null;
-    var prevY = null;
-    var prevZoomDistance = null;
-    var isPinching = false;
-    var isScrolling = false;
-    var lastClickTime = 0;
-    var lastZoomTime = 0;
-    var zoomLevel = 1; // Zoom de la page
-    
-    // Buffer de stabilisation pour moins de tremblement
-    var gestureBuffer = { click: 0, scroll: 0, zoom: 0 };
-    var BUFFER_THRESHOLD = 3; // Nombre de frames avant de confirmer un geste
-
-    // Données des films
-    var movies = [
-      { title: 'Nebula Shift', emoji: '🌌', rating: '98%' },
-      { title: 'Midnight District', emoji: '🌙', rating: '94%' },
-      { title: 'Skyline Drift', emoji: '🚗', rating: '89%' },
-      { title: 'Echoes of Cairo', emoji: '🏜️', rating: '91%' },
-      { title: 'Quantum Tide', emoji: '🌊', rating: '96%' },
-      { title: 'Desert Signal', emoji: '📡', rating: '92%' },
-      { title: 'Arcade Pulse', emoji: '🕹️', rating: '88%' },
-      { title: 'Frontier Code', emoji: '💻', rating: '90%' },
-      { title: 'Velocity Run', emoji: '⚡', rating: '87%' },
-      { title: 'Stormline', emoji: '⛈️', rating: '90%' },
-      { title: 'Ghost Atlas', emoji: '👻', rating: '93%' },
-      { title: 'Pulse Runner', emoji: '🏃', rating: '86%' }
-    ];
-
-    // Générer les cartes
-    function generateCatalog() {
-      movies.forEach(movie => {
-        var card = document.createElement('div');
-        card.className = 'movie-card';
-        card.onclick = () => onMovieClick(movie.title);
-        card.innerHTML = `
-          <div class="poster">${movie.emoji}</div>
-          <div class="movie-info">
-            <div class="movie-title">${movie.title}</div>
-            <div class="movie-rating">⭐ ${movie.rating}</div>
-          </div>
-        `;
-        catalog.appendChild(card);
-      });
-    }
-
-    function distance(p1, p2) {
-      var dx = p1.x - p2.x;
-      var dy = p1.y - p2.y;
-      return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    // Optimisé pour plus de précision: pinch détecté quand les doigts sont TRÈS proches
-    function isClickGesture(landmarks) {
-      var thumb = landmarks[4];
-      var index = landmarks[8];
-      var d = distance(thumb, index);
-      return d < 0.04; // Seuil très serré pour précision
-    }
-
-    // Peace sign: index et majeur levés, autres baissés
-    function isScrollGesture(landmarks) {
-      var index = landmarks[8];
-      var middle = landmarks[12];
-      var ring = landmarks[16];
-      var pinky = landmarks[20];
-      var wrist = landmarks[0];
-      
-      // Plus strict: doigts levés bien au-dessus du poignet
-      var indexUp = index.y < (wrist.y - 0.15);
-      var middleUp = middle.y < (wrist.y - 0.15);
-      var ringDown = ring.y > (wrist.y + 0.1);
-      var pinkyDown = pinky.y > (wrist.y + 0.1);
-      
-      return indexUp && middleUp && ringDown && pinkyDown;
-    }
-
-    function getScrollDirection(landmarks) {
-      var index = landmarks[8];
-      var middle = landmarks[12];
-      return (index.y + middle.y) / 2;
-    }
-
-    // Détecte si deux index sont visibles et calcule la distance
-    function detectZoom(hands) {
-      if (hands.length !== 2) return null;
-      
-      var index1 = hands[0][8];
-      var index2 = hands[1][8];
-      var d = distance(index1, index2);
-      
-      return { distance: d, x1: index1.x, y1: index1.y, x2: index2.x, y2: index2.y };
-    }
-
-    function run(res) {
-      if (!res.multiHandLandmarks || res.multiHandLandmarks.length === 0) {
-        cursor.style.display = 'none';
-        status.textContent = '❌ Aucune main détectée';
-        isPinching = false;
-        isScrolling = false;
-        prevY = null;
-        gestureDebug.textContent = 'Mains détectées: 0';
-        return;
-      }
-
-      status.textContent = '✅ ' + res.multiHandLandmarks.length + ' main(s) détectée(s)';
-      gestureDebug.textContent = 'Mains: ' + res.multiHandLandmarks.length;
-
-      // Traiter la première main pour le curseur
-      var lm = res.multiHandLandmarks[0];
-      var index = lm[8];
-      var w = window.innerWidth;
-      var h = window.innerHeight;
-
-      var rx = (1 - index.x) * w;
-      var ry = index.y * h;
-
-      if (sx === null) {
-        sx = rx;
-        sy = ry;
-      } else {
-        sx += (rx - sx) * 0.28;
-        sy += (ry - sy) * 0.28;
-      }
-
-      cursor.style.display = 'block';
-      cursor.style.left = (sx - 15) + 'px';
-      cursor.style.top = (sy - 15) + 'px';
-
-      var now = Date.now();
-      var clickPinch = false;
-      var scrollPeace = false;
-      var zoomGesture = null;
-
-      // Checker clic sur TOUTES les mains
-      for (var i = 0; i < res.multiHandLandmarks.length; i++) {
-        if (isClickGesture(res.multiHandLandmarks[i])) {
-          clickPinch = true;
-          break;
-        }
-      }
-
-      // Checker scroll sur première main
-      scrollPeace = isScrollGesture(lm);
-
-      // Checker zoom (2 mains)
-      if (res.multiHandLandmarks.length === 2) {
-        zoomGesture = detectZoom(res.multiHandLandmarks);
-      }
-
-      // ===== GESTION CLIC =====
-      if (clickPinch) {
-        gestureBuffer.click = Math.min(gestureBuffer.click + 1, BUFFER_THRESHOLD);
-        
-        if (gestureBuffer.click >= BUFFER_THRESHOLD && !isPinching && now - lastClickTime > 300) {
-          isPinching = true;
-          lastClickTime = now;
-          var element = document.elementFromPoint(sx, sy);
-          if (element && element !== cursor) {
-            var clickEvent = new MouseEvent('click', {
-              clientX: sx,
-              clientY: sy,
-              bubbles: true,
-              cancelable: true
-            });
-            element.dispatchEvent(clickEvent);
-            gestureDebug.innerHTML = '<span style="color: #FFD700;">👆 CLIC DÉTECTÉ</span>';
-          }
-        }
-        cursor.style.background = 'radial-gradient(circle, #FFD700, rgba(255, 215, 0, 0.5))';
-        cursor.style.boxShadow = '0 0 30px #FFD700';
-      } else {
-        gestureBuffer.click = 0;
-        if (isPinching) isPinching = false;
-      }
-
-      // ===== GESTION SCROLL =====
-      if (scrollPeace) {
-        gestureBuffer.scroll = Math.min(gestureBuffer.scroll + 1, BUFFER_THRESHOLD);
-        
-        if (gestureBuffer.scroll >= BUFFER_THRESHOLD) {
-          isScrolling = true;
-          var scrollY = getScrollDirection(lm);
-          
-          if (prevY === null) {
-            prevY = scrollY;
-          } else {
-            var delta = scrollY - prevY;
-            if (Math.abs(delta) > 0.03) {
-              var scrollAmount = delta > 0 ? 50 : -50;
-              catalog.scrollTop += scrollAmount;
-              prevY = scrollY;
-            }
-          }
-          gestureDebug.innerHTML = '<span style="color: #4CAF50;">✌️ SCROLL ACTIF</span>';
-        }
-        cursor.style.background = 'radial-gradient(circle, #4CAF50, rgba(76, 175, 80, 0.5))';
-        cursor.style.boxShadow = '0 0 30px #4CAF50';
-      } else {
-        gestureBuffer.scroll = 0;
-        if (isScrolling) {
-          isScrolling = false;
-          prevY = null;
-        }
-      }
-
-      // ===== GESTION ZOOM =====
-      if (zoomGesture) {
-        gestureBuffer.zoom = Math.min(gestureBuffer.zoom + 1, BUFFER_THRESHOLD);
-        
-        if (gestureBuffer.zoom >= BUFFER_THRESHOLD) {
-          if (prevZoomDistance === null) {
-            prevZoomDistance = zoomGesture.distance;
-          } else {
-            var zoomDelta = zoomGesture.distance - prevZoomDistance;
-            
-            if (Math.abs(zoomDelta) > 0.05) {
-              if (zoomDelta > 0) {
-                // Écarter = ZOOM IN
-                zoomLevel = Math.min(zoomLevel + 0.05, 2.5);
-              } else {
-                // Rapprocher = ZOOM OUT
-                zoomLevel = Math.max(zoomLevel - 0.05, 0.5);
-              }
-              
-              catalog.style.transform = 'scale(' + zoomLevel + ')';
-              catalog.style.transformOrigin = 'top center';
-              prevZoomDistance = zoomGesture.distance;
-              
-              gestureDebug.innerHTML = '<span style="color: #00BCD4;">🤲 ZOOM: ' + zoomLevel.toFixed(2) + 'x</span>';
-            }
-          }
-        }
-      } else {
-        gestureBuffer.zoom = 0;
-        if (prevZoomDistance !== null) {
-          prevZoomDistance = null;
-        }
-      }
-
-      // Affichage par défaut si aucun geste
-      if (!clickPinch && !scrollPeace && !zoomGesture) {
-        cursor.style.background = 'radial-gradient(circle, #ff6b6b, rgba(255, 107, 107, 0.3))';
-        cursor.style.boxShadow = '0 0 20px #ff6b6b';
-        gestureDebug.innerHTML = '🖐️ Prêt<br>Hands: ' + res.multiHandLandmarks.length;
-      }
-    }
-
-    var hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-
-    hands.setOptions({
-      maxNumHands: 2, // 2 MAINS MAINTENANT
-      modelComplexity: 1, // Complexité max = plus de précision
-      minDetectionConfidence: 0.8, // Threshold plus haut
-      minTrackingConfidence: 0.8
-    });
-
-    hands.onResults(run);
-
-    try {
-      var cam = new Camera(vid, {
-        onFrame: async () => { 
-          await hands.send({image: vid}); 
-        },
-        width: 640,
-        height: 480
-      });
-      cam.start();
-      setTimeout(() => {
-        if (status.textContent.includes('Initialisation')) {
-          status.textContent = '✅ Caméra prête!';
-        }
-      }, 1000);
-    } catch (err) {
-      status.textContent = '⚠️ Erreur caméra: ' + err.message;
-    }
-
-    function onMovieClick(title) {
-      result.textContent = '▶️ Lecture: ' + title;
-      result.style.display = 'block';
-      setTimeout(() => { result.style.display = 'none'; }, 2000);
-    }
-
-    generateCatalog();
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
