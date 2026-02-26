@@ -54,7 +54,7 @@ function distance(p1, p2) {
 // Landmark to screen
 function toScreen(landmark) {
   return {
-    x: (1 - landmark.x) * canvas.width,
+    x: isMobile ? landmark.x * canvas.width : (1 - landmark.x) * canvas.width,
     y: landmark.y * canvas.height
   };
 }
