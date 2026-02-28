@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test OpenCV + ArUco Detection</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #0ff; }
+    .status { margin: 20px 0; padding: 10px; border: 2px solid #0f0; border-radius: 5px; }
+    .status.error { border-color: #f00; color: #f00; }
+    .status.success { border-color: #0f0; color: #0f0; }
+    .status.warning { border-color: #ff0; color: #ff0; }
+    video { width: 400px; margin: 10px 0; border: 2px solid #0f0; }
+    canvas { width: 400px; border: 2px solid #0ff; margin: 10px 0; }
+    button { padding: 10px 20px; margin: 5px; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🧪 TEST OPENCV + ARUCO</h1>
+  
+  <div id="log"></div>
+
+  <div class="status" id="opencvStatus">📦 OpenCV: Chargement...</div>
+  <div class="status" id="cvStatus">🔍 cv global: Attente...</div>
+  <div class="status" id="cameraStatus">📷 Caméra: Attente...</div>
+  <div class="status" id="detectionStatus">🎯 Détection: Attente...</div>
+
+  <h2>Flux vidéo:</h2>
+  <video id="video" autoplay playsinline muted></video>
+  
+  <h2>Canvas de détection:</h2>
+  <canvas id="canvas" width="1280" height="720"></canvas>
+
+  <h2>Contrôles:</h2>
+  <button onclick="startDetection()">▶️ Démarrer détection</button>
+  <button onclick="stopDetection()">⏹️ Arrêter</button>
+  <button onclick="testOpenCV()">🧪 Tester OpenCV</button>
+
+  <script>
+    let opencvReady = false;
+    let detectionRunning = false;
+    let videoStream = null;
+
+    function log(msg, type = 'normal') {
+      const logDiv = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = msg;
+      if (type === 'error') line.style.color = '#f00';
+      if (type === 'success') line.style.color = '#0f0';
+      if (type === 'warning') line.style.color = '#ff0';
+      logDiv.appendChild(line);
+      console.log(msg);
+    }
+
+    function updateStatus(id, text, type = 'normal') {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'status';
+      if (type === 'error') el.className += ' error';
+      if (type === 'success') el.className += ' success';
+      if (type === 'warning') el.className += ' warning';
+    }
+
+    // Callback OpenCV
+    window.onOpenCvReady = function() {
+      log('✅ onOpenCvReady() callback déclenché', 'success');
+      opencvReady = true;
+      updateStatus('opencvStatus', '✅ OpenCV.js: Callback reçu', 'success');
+      testOpenCV();
+    };
+
+    // Charger OpenCV
+    function loadOpenCV() {
+      log('🔄 Création du script OpenCV...');
+      const script = document.createElement('script');
+      script.src = 'https://docs.opencv.org/4.6.0/opencv.js';
+      
+      script.onload = function() {
+        log('✅ Script chargé', 'success');
+        updateStatus('opencvStatus', '✅ OpenCV.js: Script chargé', 'success');
+        
+        setTimeout(() => {
+          if (typeof cv !== 'undefined') {
+            log('✅ cv global disponible', 'success');
+            opencvReady = true;
+            updateStatus('cvStatus', '✅ cv global: Disponible', 'success');
+            testOpenCV();
+          } else {
+            log('⚠️ cv global pas disponible après load', 'warning');
+            updateStatus('cvStatus', '⚠️ cv global: Pas disponible', 'warning');
+          }
+        }, 100);
+      };
+      
+      script.onerror = function() {
+        log('❌ Erreur chargement OpenCV', 'error');
+        updateStatus('opencvStatus', '❌ OpenCV.js: Erreur chargement', 'error');
+      };
+      
+      document.head.appendChild(script);
+    }
+
+    function testOpenCV() {
+      log('\n🧪 Test OpenCV...');
+      
+      if (typeof cv === 'undefined') {
+        log('❌ cv pas disponible', 'error');
+        updateStatus('cvStatus', '❌ cv global: PAS disponible', 'error');
+        return;
+      }
+      
+      log('✅ cv.Mat: ' + typeof cv.Mat, 'success');
+      log('✅ cv.matFromImageData: ' + typeof cv.matFromImageData, 'success');
+      log('✅ cv.cvtColor: ' + typeof cv.cvtColor, 'success');
+      log('✅ cv.getPredefinedDictionary: ' + typeof cv.getPredefinedDictionary, 'success');
+      log('✅ cv.ArucoDetector: ' + typeof cv.ArucoDetector, 'success');
+      log('✅ cv.DICT_6X6_250: ' + typeof cv.DICT_6X6_250, 'success');
+      
+      updateStatus('cvStatus', '✅ cv global: Tous les outils disponibles', 'success');
+    }
+
+    async function initCamera() {
+      log('\n📷 Demande accès caméra...');
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        document.getElementById('video').srcObject = videoStream;
+        
+        await new Promise(resolve => {
+          document.getElementById('video').onloadedmetadata = () => {
+            document.getElementById('video').play();
+            log('✅ Caméra démarrée', 'success');
+            updateStatus('cameraStatus', '✅ Caméra: Active', 'success');
+            resolve();
+          };
+        });
+      } catch (error) {
+        log('❌ Erreur caméra: ' + error.message, 'error');
+        updateStatus('cameraStatus', '❌ Caméra: ' + error.message, 'error');
+      }
+    }
+
+    function startDetection() {
+      if (!opencvReady || typeof cv === 'undefined') {
+        log('❌ OpenCV pas prêt', 'error');
+        return;
+      }
+
+      if (!videoStream) {
+        log('📷 Initialisation caméra...', 'warning');
+        initCamera().then(() => startDetection());
+        return;
+      }
+
+      detectionRunning = true;
+      log('\n▶️ Détection démarrée', 'success');
+      updateStatus('detectionStatus', '▶️ Détection: En cours', 'success');
+      
+      detectFrame();
+    }
+
+    function stopDetection() {
+      detectionRunning = false;
+      log('⏹️ Détection arrêtée', 'warning');
+      updateStatus('detectionStatus', '⏹️ Détection: Arrêtée', 'warning');
+    }
+
+    let detectionCount = 0;
+    function detectFrame() {
+      if (!detectionRunning) return;
+
+      requestAnimationFrame(detectFrame);
+
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      try {
+        // Dessiner la vidéo sur le canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Détection
+        let img = cv.matFromImageData(imageData);
+        let gray = new cv.Mat();
+        cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+
+        let dictionary = cv.getPredefinedDictionary(cv.DICT_6X6_250);
+        let detector = new cv.ArucoDetector(dictionary);
+        
+        let corners = new cv.MatVector();
+        let ids = new cv.Mat();
+        detector.detectMarkers(gray, corners, ids);
+
+        let markerCount = ids.rows;
+        detectionCount++;
+
+        if (detectionCount % 30 === 0) { // Log toutes les 30 frames
+          if (markerCount > 0) {
+            log(`✅ ${markerCount} marqueur(s) détecté(s)!`, 'success');
+            updateStatus('detectionStatus', `✅ ${markerCount} marqueur(s) trouvé(s)!`, 'success');
+          } else {
+            log(`❌ Aucun marqueur (frame ${detectionCount})`, 'warning');
+          }
+        }
+
+        // Dessiner les marqueurs
+        if (markerCount > 0) {
+          for (let i = 0; i < markerCount; i++) {
+            let corners_i = corners.get(i);
+            
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            for (let j = 0; j < 4; j++) {
+              const x = corners_i.data32F[j * 2];
+              const y = corners_i.data32F[j * 2 + 1];
+              if (j === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            
+            const x = corners_i.data32F[0];
+            const y = corners_i.data32F[1];
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            
+            // ID du marqueur
+            const id = ids.data32S[i];
+            ctx.fillStyle = '#ff00ff';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('ID:' + id, x, y - 10);
+          }
+        }
+
+        img.delete();
+        gray.delete();
+        dictionary.delete();
+        detector.delete();
+        corners.delete();
+        ids.delete();
+
+      } catch (error) {
+        log('❌ Erreur détection: ' + error.message, 'error');
+      }
+    }
+
+    // Démarrage
+    window.addEventListener('load', () => {
+      log('🚀 Page chargée');
+      loadOpenCV();
+    });
+  </script>
+</body>
+</html>

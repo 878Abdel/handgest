@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test Caméra Simple</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: white;
+    }
+    h1 { color: #8be9fd; }
+    video {
+      width: 100%;
+      max-width: 640px;
+      border: 3px solid #8be9fd;
+      border-radius: 10px;
+      margin: 20px 0;
+    }
+    #status {
+      padding: 15px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 8px;
+      margin: 10px 0;
+      font-family: monospace;
+    }
+    .success { color: #51cf66; }
+    .error { color: #ff6b6b; }
+    .info { color: #8be9fd; }
+  </style>
+</head>
+<body>
+  <h1>🎥 Test d'Accès Caméra</h1>
+  <div id="status">⏳ Démarrage...</div>
+  <video id="video" autoplay playsinline muted></video>
+
+  <script>
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+
+    async function testCamera() {
+      try {
+        status.innerHTML = '<span class="info">📷 Demande d\'accès à la caméra...</span>';
+        console.log('Demande getUserMedia...');
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false
+        });
+
+        console.log('✓ Accès accordé !');
+        video.srcObject = stream;
+
+        video.onloadedmetadata = () => {
+          video.play();
+          status.innerHTML = '<span class="success">✅ CAMÉRA FONCTIONNE !</span><br>' +
+            'Résolution: ' + video.videoWidth + 'x' + video.videoHeight;
+          console.log('✓ Vidéo active:', video.videoWidth, 'x', video.videoHeight);
+        };
+
+      } catch (error) {
+        console.error('❌ Erreur:', error);
+        let msg = '<span class="error">❌ ERREUR: ' + error.name + '</span><br><br>';
+
+        if (error.name === 'NotAllowedError') {
+          msg += 'Vous avez <b>refusé</b> l\'accès à la caméra.<br>';
+          msg += 'Cliquez sur l\'icône 🔒 dans la barre d\'adresse<br>';
+          msg += 'et autorisez l\'accès à la caméra.';
+        } else if (error.name === 'NotFoundError') {
+          msg += 'Aucune caméra détectée.';
+        } else if (error.name === 'NotReadableError') {
+          msg += 'La caméra est utilisée par une autre application.';
+        } else {
+          msg += error.message;
+        }
+
+        status.innerHTML = msg;
+      }
+    }
+
+    console.log('🚀 Démarrage test caméra...');
+    console.log('URL:', window.location.href);
+    console.log('Navigateur:', navigator.userAgent);
+
+    // Vérifier que getUserMedia existe
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      console.log('✓ getUserMedia disponible');
+      testCamera();
+    } else {
+      console.error('❌ getUserMedia non supporté');
+      status.innerHTML = '<span class="error">❌ Votre navigateur ne supporte pas getUserMedia</span>';
+    }
+  </script>
+</body>
+</html>

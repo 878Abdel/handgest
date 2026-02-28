@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Test Three.js Simple</title>
+  <style>
+    body { margin: 0; padding: 20px; font-family: monospace; background: #1a1a2e; color: white; }
+    h1 { color: #8be9fd; }
+    .log { background: #000; padding: 10px; margin: 5px 0; border-left: 3px solid #8be9fd; }
+    .error { border-left-color: #ff6b6b; color: #ff6b6b; }
+    .success { border-left-color: #51cf66; color: #51cf66; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Test Three.js Simple</h1>
+  <div id="logs"></div>
+
+  <script>
+    const logsDiv = document.getElementById('logs');
+    function log(message, isError = false) {
+      const div = document.createElement('div');
+      div.className = 'log ' + (isError ? 'error' : 'success');
+      div.textContent = message;
+      logsDiv.appendChild(div);
+      console.log(message);
+    }
+
+    log('1️⃣ Vérification avant chargement...');
+    log('THREE avant: ' + (typeof THREE === 'undefined' ? '❌ Undefined' : '✅ Défini'));
+
+    // Charger Three.js
+    const script = document.createElement('script');
+    script.src = './three.min.js';
+    script.onload = function() {
+      log('2️⃣ Script three.min.js chargé');
+      setTimeout(() => {
+        if (typeof THREE === 'undefined') {
+          log('❌ ERREUR: THREE toujours undefined après chargement!', true);
+        } else {
+          log('✅ THREE chargé avec succès');
+          log('Version: ' + THREE.REVISION);
+          
+          try {
+            const scene = new THREE.Scene();
+            log('✅ Scene créée avec succès');
+          } catch (e) {
+            log('❌ Erreur création Scene: ' + e.message, true);
+          }
+        }
+      }, 100);
+    };
+    script.onerror = function() {
+      log('❌ ERREUR: Impossible de charger ./three.min.js', true);
+    };
+    document.head.appendChild(script);
+
+    log('3️⃣ Script de chargement lancé...');
+  </script>
+</body>
+</html>

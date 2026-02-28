@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Pro AI Hub</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 50%, #16213e 100%);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 1200px;
+      width: 90%;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-size: 64px;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 15px;
+      background: linear-gradient(135deg, #64c8ff 0%, #4a9eff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 20px;
+      color: rgba(255, 255, 255, 0.6);
+      font-weight: 500;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+
+    .demo-card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1.5px solid rgba(100, 200, 255, 0.2);
+      border-radius: 24px;
+      padding: 32px;
+      backdrop-filter: blur(20px);
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .demo-card:hover {
+      background: rgba(100, 200, 255, 0.12);
+      border-color: rgba(100, 200, 255, 0.5);
+      transform: translateY(-8px);
+      box-shadow: 0 30px 70px rgba(100, 200, 255, 0.2);
+    }
+
+    .demo-emoji {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .demo-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .demo-desc {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 20px;
+      flex-grow: 1;
+    }
+
+    .demo-features {
+      font-size: 12px;
+      color: rgba(100, 200, 255, 0.7);
+      margin-bottom: 20px;
+      line-height: 1.8;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+    }
+
+    .feature-item::before {
+      content: '✓';
+      color: #4ade80;
+      font-weight: 700;
+    }
+
+    .demo-btn {
+      background: linear-gradient(135deg, #64c8ff 0%, #4a9eff 100%);
+      color: #000;
+      border: none;
+      border-radius: 14px;
+      padding: 12px 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 14px;
+    }
+
+    .demo-btn:hover {
+      box-shadow: 0 10px 30px rgba(100, 200, 255, 0.3);
+      transform: scale(1.05);
+    }
+
+    .status-badge {
+      display: inline-block;
+      background: rgba(74, 222, 128, 0.15);
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      color: #4ade80;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .status-badge.new {
+      background: rgba(255, 193, 7, 0.15);
+      border-color: rgba(255, 193, 7, 0.3);
+      color: #fbbf24;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid rgba(100, 200, 255, 0.1);
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 14px;
+    }
+
+    .footer a {
+      color: #64c8ff;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+
+    .footer a:hover {
+      color: #78dcff;
+    }
+
+    .quick-info {
+      background: rgba(100, 200, 255, 0.1);
+      border: 1px solid rgba(100, 200, 255, 0.2);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 40px;
+      color: #64c8ff;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .quick-info strong {
+      color: #78dcff;
+    }
+
+    @media (max-width: 768px) {
+      h1 {
+        font-size: 44px;
+      }
+
+      .demo-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .demo-card {
+        padding: 20px;
+      }
+
+      .demo-emoji {
+        font-size: 36px;
+      }
+
+      .demo-title {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>✨ Vision Pro AI Hub</h1>
+      <p class="subtitle">Hand Tracking AR Experience - Choose Your Version</p>
+    </header>
+
+    <div class="quick-info">
+      📍 <strong>Quick Start:</strong> Commencez par la "Version Complète" pour une expérience optimale
+    </div>
+
+    <div class="demo-grid">
+      <!-- Version Complète -->
+      <a href="vision-pro-complete.html" class="demo-card">
+        <div class="status-badge">⭐ RECOMMANDÉ</div>
+        <div class="demo-emoji">🎬</div>
+        <h3 class="demo-title">Version Complète</h3>
+        <p class="demo-desc">
+          La meilleure version avec tous les éléments intégrés pour une expérience Vision Pro authentique
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">Hand tracking complet (2 mains)</div>
+          <div class="feature-item">Détection précise des pincements</div>
+          <div class="feature-item">Curseur Quest 3 laser</div>
+          <div class="feature-item">Skeleton visualization</div>
+          <div class="feature-item">UI glass manipulable</div>
+        </div>
+        <button class="demo-btn">Lancer →</button>
+      </a>
+
+      <!-- Gestes Avancés -->
+      <a href="vision-pro-gesture.html" class="demo-card">
+        <div class="status-badge">👆 GESTURES</div>
+        <div class="demo-emoji">🤌</div>
+        <h3 class="demo-title">Gestes Avancés</h3>
+        <p class="demo-desc">
+          Focalisé sur la détection de gestes complexes et interactions intuitive
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">Détection open hand</div>
+          <div class="feature-item">Pointing gesture</div>
+          <div class="feature-item">Peace sign recognition</div>
+          <div class="feature-item">Double hand interactions</div>
+          <div class="feature-item">Smooth animations</div>
+        </div>
+        <button class="demo-btn">Lancer →</button>
+      </a>
+
+      <!-- AI Mode -->
+      <a href="vision-pro-ai.html" class="demo-card">
+        <div class="status-badge new">🤖 IA</div>
+        <div class="demo-emoji">🧠</div>
+        <h3 class="demo-title">Mode AI</h3>
+        <p class="demo-desc">
+          Intégration avec module avancé pour analyse et apprentissage des gestes
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">Analyse gestes ML</div>
+          <div class="feature-item">Hand smoothing avancé</div>
+          <div class="feature-item">Zone interactions</div>
+          <div class="feature-item">Gesture buffering</div>
+          <div class="feature-item">ArUco preparation</div>
+        </div>
+        <button class="demo-btn">Lancer →</button>
+      </a>
+
+      <!-- 3D Advanced -->
+      <a href="vision-pro-3d.html" class="demo-card">
+        <div class="status-badge new">🎬 3D</div>
+        <div class="demo-emoji">🎨</div>
+        <h3 class="demo-title">3D Avancé</h3>
+        <p class="demo-desc">
+          Intégration Three.js pour interactions 3D immersives et objets manipulables
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">Scene 3D avec Three.js</div>
+          <div class="feature-item">Cubes flottants interactifs</div>
+          <div class="feature-item">Particles system</div>
+          <div class="feature-item">Lighting dynamique</div>
+          <div class="feature-item">Hand-controlled objects</div>
+        </div>
+        <button class="demo-btn">Lancer →</button>
+      </a>
+
+      <!-- Menu Principal -->
+      <a href="vision-pro-menu.html" class="demo-card">
+        <div class="demo-emoji">🏠</div>
+        <h3 class="demo-title">Menu Principal</h3>
+        <p class="demo-desc">
+          Page d'accueil officielle avec explications détaillées des features
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">Description complète</div>
+          <div class="feature-item">Feature showcase</div>
+          <div class="feature-item">Tech stack info</div>
+          <div class="feature-item">Design moderne</div>
+          <div class="feature-item">Navigation facile</div>
+        </div>
+        <button class="demo-btn">Ouvrir →</button>
+      </a>
+
+      <!-- Documentation -->
+      <div class="demo-card">
+        <div class="demo-emoji">📖</div>
+        <h3 class="demo-title">Documentation</h3>
+        <p class="demo-desc">
+          Guides complets et instructions de configuration
+        </p>
+        <div class="demo-features">
+          <div class="feature-item">VISION_PRO_GUIDE.md</div>
+          <div class="feature-item">QUICK_START.md</div>
+          <div class="feature-item">config.json</div>
+          <div class="feature-item">Code comments</div>
+          <div class="feature-item">API reference</div>
+        </div>
+        <button class="demo-btn">Consulter</button>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Vision Pro AI Hub - Hand Tracking AR Experience</p>
+      <p style="margin-top: 10px; font-size: 12px;">
+        Built with <span style="color: #ff6b6b;">❤</span> | Inspired by Apple Vision Pro & Meta Quest 3
+        <br/>
+        <a href="#" onclick="alert('Technologies: MediaPipe Hands, OpenCV.js, Three.js, WebGL'); return false;">
+          Technologies
+        </a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    // Simple analytics logging
+    console.log('✨ Vision Pro AI Hub - Initialized');
+    console.log('📱 Available Demos:');
+    console.log('  1. vision-pro-complete.html (Recommended)');
+    console.log('  2. vision-pro-gesture.html');
+    console.log('  3. vision-pro-ai.html');
+    console.log('  4. vision-pro-3d.html');
+    console.log('  5. vision-pro-menu.html');
+    console.log('');
+    console.log('📖 Documentation: VISION_PRO_GUIDE.md, QUICK_START.md');
+  </script>
+</body>
+</html>

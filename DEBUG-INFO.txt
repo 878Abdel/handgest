@@ -1,0 +1,107 @@
+═══════════════════════════════════════════════════════════
+  🔍 MODE DEBUG - TOUTES LES CORRECTIONS APPLIQUÉES
+═══════════════════════════════════════════════════════════
+
+🎯 PROBLÈME RÉSOLU :
+   La caméra ne démarrait pas dans index.html
+
+✅ CORRECTIONS APPLIQUÉES :
+
+   1. Three.js chargé AVANT le script principal
+      → Évite les erreurs "THREE is not defined"
+   
+   2. Vérifications ajoutées partout
+      → Vérifie que chaque librairie est chargée
+   
+   3. Try-catch sur toutes les fonctions
+      → Aucune erreur ne bloque l'application
+   
+   4. Affichage sur l'écran de chargement
+      → Vous voyez EXACTEMENT ce qui se passe
+   
+   5. Logs détaillés dans la console
+      → Debugging facile avec F12
+
+═══════════════════════════════════════════════════════════
+
+🧪 3 FICHIERS DE TEST :
+
+   📄 test-camera.html
+      → Test UNIQUEMENT la caméra
+      → Le plus simple, devrait marcher
+      → http://localhost:8000/test-camera.html
+
+   📄 diagnostic.html  ⭐ RECOMMANDÉ
+      → Teste TOUT : navigateur, caméra, Three.js, OpenCV
+      → Affiche résultats visuels + journal détaillé
+      → http://localhost:8000/diagnostic.html
+
+   📄 index.html
+      → Application AR complète
+      → Maintenant avec DEBUG maximum
+      → http://localhost:8000/index.html
+
+═══════════════════════════════════════════════════════════
+
+🔍 COMMENT DEBUGGER :
+
+   1. Ouvrir l'URL dans Chrome/Edge
+   
+   2. Appuyer sur F12 (ouvrir DevTools)
+   
+   3. Aller dans l'onglet "Console"
+   
+   4. Observer les messages :
+      ✅ = Succès (vert)
+      ❌ = Erreur (rouge)
+      ⏳ = En cours (bleu)
+   
+   5. Regarder aussi l'écran de chargement
+      → Affiche chaque étape en temps réel
+
+═══════════════════════════════════════════════════════════
+
+💡 CE QUE VOUS DEVRIEZ VOIR :
+
+   Dans index.html :
+   
+   1. Écran de chargement avec messages :
+      ✓ THREE.js détecté
+      ✓ Renderer 3D créé
+      ✓ Caméra active: 1280x720
+      ✓ Animation démarrée
+   
+   2. Puis l'écran de chargement disparaît (2 secondes)
+   
+   3. Vous voyez votre webcam en arrière-plan
+   
+   4. Le HUD en haut à gauche affiche :
+      Caméra: ✓ Active
+      FPS: 30
+   
+   5. Console (F12) affiche :
+      ═══════════════════════════════
+      ✅ APPLICATION DÉMARRÉE AVEC SUCCÈS !
+      ═══════════════════════════════
+
+═══════════════════════════════════════════════════════════
+
+❌ SI ÇA NE MARCHE TOUJOURS PAS :
+
+   1. Testez diagnostic.html en premier
+   
+   2. Copiez TOUS les messages de la console
+   
+   3. Notez à quelle étape ça bloque :
+      • Chargement Three.js ?
+      • Demande accès caméra ?
+      • Activation caméra ?
+      • Démarrage animation ?
+   
+   4. Envoyez-moi ces infos
+
+═══════════════════════════════════════════════════════════
+
+Le serveur tourne déjà sur http://localhost:8000
+
+Commencez par : http://localhost:8000/diagnostic.html

@@ -1,0 +1,112 @@
+{
+  "visionPro": {
+    "name": "Vision Pro AI",
+    "version": "1.0.0",
+    "description": "Hand Tracking AR Experience inspired by Apple Vision Pro"
+  },
+  
+  "handTracking": {
+    "enabled": true,
+    "maxHands": 2,
+    "modelComplexity": 1,
+    "minDetectionConfidence": 0.7,
+    "minTrackingConfidence": 0.5,
+    "smoothing": 0.65
+  },
+
+  "gestures": {
+    "pinchDetection": {
+      "enabled": true,
+      "minDistance": 28,
+      "maxDistance": 85,
+      "threshold": 25
+    },
+    
+    "openHandDetection": {
+      "enabled": true,
+      "fingerExtendThreshold": 0.1
+    },
+    
+    "pointingDetection": {
+      "enabled": true,
+      "fingerExtendThreshold": 0.15
+    }
+  },
+
+  "ui": {
+    "dimensions": {
+      "width": 950,
+      "height": 640
+    },
+    
+    "style": {
+      "backdropBlur": "40px",
+      "borderRadius": "50px",
+      "borderColor": "rgba(120, 220, 255, 0.25)",
+      "backgroundColor": "rgba(10, 10, 15, 0.8)"
+    },
+    
+    "interactions": {
+      "dragSensitivity": 0.1,
+      "minScale": 0.75,
+      "maxScale": 1.6,
+      "zoomRefDistance": 140
+    }
+  },
+
+  "cursor": {
+    "type": "quest3",
+    "rayLength": 280,
+    "colors": {
+      "primary": "rgba(120, 220, 255, 0.95)",
+      "secondary": "rgba(100, 200, 255, 0.6)",
+      "glow": "rgba(120, 220, 255, 0.8)"
+    },
+    "effects": {
+      "glowEnabled": true,
+      "particlesEnabled": false,
+      "rayGradient": true
+    }
+  },
+
+  "aruco": {
+    "detectionEnabled": true,
+    "markerDictionary": "DICT_5X5_250",
+    "minMarkers": 1,
+    "maxMarkers": 5,
+    "confidenceThreshold": 0.8,
+    "fixUIOnMarker": true
+  },
+
+  "performance": {
+    "targetFPS": 60,
+    "enableSkeletonDrawing": true,
+    "enableDebugPanel": true,
+    "canvasBuffering": true
+  },
+
+  "colors": {
+    "primary": "#64c8ff",
+    "secondary": "#78dcff",
+    "success": "#4ade80",
+    "warning": "#fbbf24",
+    "background": "#0a0a0a"
+  },
+
+  "animation": {
+    "cardHoverScale": 1.04,
+    "cardHoverTranslate": -12,
+    "cubeAutoRotate": true,
+    "cubeRotationSpeed": 0.001,
+    "particleCount": 50,
+    "particleLife": 1000
+  },
+
+  "shortcuts": {
+    "toggleDebug": "d",
+    "toggleSkeleton": "s",
+    "captureScreenshot": "c",
+    "resetUI": "r",
+    "toggleFullscreen": "f"
+  }
+}

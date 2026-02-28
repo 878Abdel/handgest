@@ -3,116 +3,984 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hand Tracking</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-</head>
-<body>
-  <video id="video" class="video-feed"></video>
-  <canvas id="canvas" class="canvas-overlay"></canvas>
-  
-  <div id="cursor" class="cursor"></div>
-  <div id="pinchIndicator" class="pinch-indicator"></div>
-  
-  <!-- Fenêtre 1: Boutons -->
-  <div class="window" id="window1" style="left: 50px; top: 50px;">
-    <div class="window-title">
-      <span>🖱️ Contrôles</span>
-      <div class="window-controls">
-        <button class="win-btn">_</button>
-        <button class="win-btn">□</button>
-        <button class="win-btn">✕</button>
-      </div>
-    </div>
-    <div class="window-body">
-      <button class="interactive-btn" data-action="like">👍 J'aime</button>
-      <button class="interactive-btn" data-action="dislike">👎 Pas aimer</button>
-      <button class="interactive-btn" data-action="share">🔗 Partager</button>
-      <button class="interactive-btn" data-action="save">💾 Sauvegarder</button>
-      <div class="action-log" id="actionLog"></div>
-    </div>
-  </div>
+  <title>Apple Vision Pro AR - ArUco</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-  <!-- Fenêtre 2: Défilement -->
-  <div class="window" id="window2" style="left: 350px; top: 50px;">
-    <div class="window-title">
-      <span>📜 Contenu</span>
-      <div class="window-controls">
-        <button class="win-btn">_</button>
-        <button class="win-btn">□</button>
-        <button class="win-btn">✕</button>
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #000;
+    }
+
+    #videoBackground {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    /* Interface flottante */
+    #visionElement {
+      position: fixed;
+      width: 850px;
+      height: 580px;
+      background: rgba(20, 20, 30, 0.92);
+      backdrop-filter: blur(20px);
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 40px;
+      z-index: 100;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: box-shadow 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #visionElement.locked {
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(76, 175, 80, 0.5), 0 0 30px rgba(76, 175, 80, 0.3);
+    }
+
+    /* Header */
+    #visionElement .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    #visionElement .header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    #visionElement .header-right {
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    #markerStatus {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 13px;
+      font-weight: 600;
+      color: #ff6b6b;
+    }
+
+    #markerStatus.detected {
+      color: #4CAF50;
+      border-color: rgba(76, 175, 80, 0.3);
+      background: rgba(76, 175, 80, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    #markerStatus.detected .status-dot {
+      animation: pulse-green 2s ease-in-out infinite;
+    }
+    #detectionProgress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 12px;
+      font-weight: 600;
+      color: #ffb74d;
+    }
+
+    #detectionProgress.active {
+      background: rgba(255, 193, 7, 0.1);
+      border-color: rgba(255, 193, 7, 0.3);
+    }
+
+    .progress-bar {
+      width: 60px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ffb74d, #ff9800);
+      transition: width 0.3s ease;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    @keyframes pulse-green {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    /* Contenu */
+    #contentArea {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .content-section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+      opacity: 0.9;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .card {
+      aspect-ratio: 9/12;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: flex-end;
+      padding: 12px;
+    }
+
+    .card:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    /* Scrollbar */
+    #contentArea::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #contentArea::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #contentArea::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    #contentArea::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Indicateurs debug */
+    #debugInfo {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(139, 233, 253, 0.3);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 11px;
+      color: #8be9fd;
+      font-family: 'Courier New', monospace;
+      z-index: 99;
+      font-weight: 500;
+    }
+
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 20px;
+      z-index: 200;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.85);
+      padding: 40px 60px;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .loading.hidden {
+      display: none;
+    }
+
+    #loadingText {
+      margin-bottom: 15px;
+    }
+
+    #initStatus {
+      font-size: 12px;
+      color: #8be9fd;
+      text-align: left;
+      max-width: 400px;
+      margin-top: 15px;
+    }
+
+    #initStatus div {
+      margin: 4px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <video id="videoBackground" autoplay playsinline muted></video>
+
+  <!-- Interface visuelle flottante -->
+  <div id="visionElement">
+    <div class="header">
+      <h1>🎬 Streaming</h1>
+      <div class="header-right">
+        <div id="detectionProgress" style="display: none;">
+          <span id="progressText">0/5</span>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+          </div>
+        </div>
+        <div id="markerStatus">
+          <span class="status-dot"></span>
+          <span id="statusText">Marqueur détection...</span>
+        </div>
       </div>
     </div>
-    <div class="window-body">
-      <div class="scroll-area" id="scrollArea">
-        <div class="scroll-content">
-          <h3>Bienvenue!</h3>
-          <p>Utilisez vos gestes pour interagir:</p>
-          <ul>
-            <li>👆 Déplacez votre index pour bouger le curseur</li>
-            <li>🤏 Pincez pouce-index pour cliquer</li>
-            <li>🤏↕️ Pincez + montez/descendez pour défiler</li>
-          </ul>
-          <h3>Fonctionnalités</h3>
-          <p>✓ Détection main en temps réel</p>
-          <p>✓ Curseur fluide avec smoothing</p>
-          <p>✓ Gestes précis (seuil 35px)</p>
-          <p>✓ Interface Windows 95</p>
-          <h3>Performance</h3>
-          <p>FPS tracking actif</p>
-          <p>MediaPipe optimisé</p>
-          <p>Résolution 1280x720</p>
-          <h3>Compatibilité</h3>
-          <p>Desktop: caméra frontale</p>
-          <p>Mobile: caméra arrière</p>
-          <h3>Plus de contenu...</h3>
-          <p>Ligne 1</p><p>Ligne 2</p><p>Ligne 3</p>
-          <p>Ligne 4</p><p>Ligne 5</p><p>Ligne 6</p>
-          <p>Ligne 7</p><p>Ligne 8</p><p>Ligne 9</p>
-          <p>Ligne 10</p><p>Ligne 11</p><p>Ligne 12</p>
+
+    <div id="contentArea">
+      <!-- Section Tendances -->
+      <div class="content-section">
+        <div class="section-title">À l'affiche</div>
+        <div class="cards-grid">
+          <div class="card" style="background: linear-gradient(135deg, #E53935 0%, #B71C1C 100%);">
+            <div class="card-title">CHERRY</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #FF6F00 0%, #E65100 100%);">
+            <div class="card-title">THE BATMAN</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%);">
+            <div class="card-title">DAREDEVIL</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #7B1FA2 0%, #51197A 100%);">
+            <div class="card-title">FOUNDATION</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #0288D1 0%, #0277BD 100%);">
+            <div class="card-title">LUCK LANG</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #558B2F 0%, #356C3C 100%);">
+            <div class="card-title">GHOSTED</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section Nouveautés -->
+      <div class="content-section">
+        <div class="section-title">Nouveautés</div>
+        <div class="cards-grid">
+          <div class="card" style="background: linear-gradient(135deg, #FF4081 0%, #E91E63 100%);">
+            <div class="card-title">KILLERS OF...</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);">
+            <div class="card-title">GREYS HUNT</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #00897B 0%, #00695C 100%);">
+            <div class="card-title">LOST WORLD</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #BF360C 0%, #8D3000 100%);">
+            <div class="card-title">RED SKY</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #6A1B9A 0%, #4A148C 100%);">
+            <div class="card-title">DYNASTY</div>
+          </div>
+          <div class="card" style="background: linear-gradient(135deg, #FDD835 0%, #F57F17 100%);">
+            <div class="card-title">GOLDEN ERA</div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Fenêtre 3: Formulaire -->
-  <div class="window" id="window3" style="left: 650px; top: 50px;">
-    <div class="window-title">
-      <span>✏️ Options</span>
-      <div class="window-controls">
-        <button class="win-btn">_</button>
-        <button class="win-btn">□</button>
-        <button class="win-btn">✕</button>
-      </div>
-    </div>
-    <div class="window-body">
-      <label><input type="checkbox" class="interactive-check" id="opt1" checked> Option A</label>
-      <label><input type="checkbox" class="interactive-check" id="opt2"> Option B</label>
-      <label><input type="checkbox" class="interactive-check" id="opt3"> Option C</label>
-      <div style="margin-top: 10px;">
-        <button class="interactive-btn" data-action="submit">✓ Valider</button>
-        <button class="interactive-btn" data-action="reset">✕ Annuler</button>
-      </div>
-    </div>
-  </div>
-  
-  <div class="panel">
-    <div class="status" id="status">Initialisation...</div>
-    <div class="info">
-      <div><strong>Position:</strong> <span id="pos">--</span></div>
-      <div><strong>Pincement:</strong> <span id="pinch">--</span>px</div>
-      <div><strong>État:</strong> <span id="state">Repos</span></div>
-      <div><strong>Caméra:</strong> <span id="camera">--</span></div>
-    </div>
-    <div class="controls">
-      <label><input type="checkbox" id="showLandmarks" checked> Landmarks</label>
-      <label><input type="checkbox" id="showConnections" checked> Connexions</label>
-    </div>
-    <button id="testBtn" class="btn">TESTER PINCEMENT</button>
-    <div id="output" class="output"></div>
+  <!-- Debug info -->
+  <div id="debugInfo">
+    <div>🎯 Position: <span id="positionDebug">--</span></div>
+    <div>📍 Marqueur: <span id="markerDebug">Non détecté</span></div>
+    <div>⏱️ FPS: <span id="fpsDebug">--</span></div>
+    <div>📦 jsaruco: <span id="arucoStatus">⏳ Chargement...</span></div>
   </div>
 
-  <script src="script.js"></script>
+  <!-- Loading screen -->
+  <div class="loading" id="loading">
+    <div id="loadingText">⏳ Chargement...</div>
+    <div id="initStatus"></div>
+  </div>
+
+  <canvas id="imageCanvas" style="display: none;"></canvas>
+
+  <!-- jsfeat - bibliothèque de traitement d'image léger (optionnel) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsfeat/0.0.8/js/jsfeat-min.js" async></script>
+  
+  <!-- Script principal avec détection intégrée -->
+  <script>
+    console.log('═══════════════════════════════════════');
+    console.log('🚀 VISION PRO AR - démarrage');
+    console.log('═══════════════════════════════════════');
+    
+    const videoElement = document.getElementById('videoBackground');
+    const imageCanvas = document.getElementById('imageCanvas');
+    const imageCtx = imageCanvas.getContext('2d');
+    const visionElement = document.getElementById('visionElement');
+    
+    let arucoDetected = false;
+    let markerLocked = false;
+    let markerPosition = { x: 0, y: 0 };
+    let screenWidth = window.innerWidth;
+    let screenHeight = window.innerHeight;
+    
+    // Variables pour animation flottante
+    let floatingTime = 0;
+    let fps = 0;
+    let frameCount = 0;
+    let lastTime = performance.now();
+    
+    // Variables pour validation multi-frames (anti faux-positifs)
+    let consecutiveDetections = 0;
+    const REQUIRED_CONSECUTIVE_FRAMES = 8; // Doit détecter le marqueur 8 fois de suite (ULTRA-STRICT)
+    let lastMarkerPos = null;
+    const MIN_MARKER_SIZE_PX = 150; // Taille minimale absolue en pixels (empêche petits points)
+
+    function addInitStatus(message, isError = false) {
+      const statusDiv = document.getElementById('initStatus');
+      if (statusDiv) {
+        const line = document.createElement('div');
+        line.textContent = message;
+        line.style.color = isError ? '#ff6b6b' : '#8be9fd';
+        statusDiv.appendChild(line);
+      }
+      console.log(message);
+    }
+
+    // ============ CAMERA INITIALIZATION ============
+    async function initCamera() {
+      try {
+        addInitStatus('📷 Demande accès caméra...');
+        console.log('📷 Demande d\'accès caméra...');
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: false
+        });
+
+        addInitStatus('✅ Accès caméra accordé !');
+        console.log('✓ Accès caméra accordé');
+        videoElement.srcObject = stream;
+        
+        videoElement.onloadedmetadata = () => {
+          videoElement.play();
+          imageCanvas.width = videoElement.videoWidth;
+          imageCanvas.height = videoElement.videoHeight;
+          addInitStatus('✅ Caméra active: ' + videoElement.videoWidth + 'x' + videoElement.videoHeight);
+          console.log('✓ Caméra initialisée:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+        };
+        
+      } catch (error) {
+        console.error('❌ Erreur caméra:', error);
+        addInitStatus('❌ Erreur caméra: ' + error.name, true);
+        
+        let errorMsg = 'Impossible d\'accéder à la caméra.\n\n';
+        if (error.name === 'NotAllowedError') {
+          errorMsg += 'Vous avez refusé l\'accès à la caméra.';
+        } else if (error.name === 'NotFoundError') {
+          errorMsg += 'Aucune caméra détectée sur cet appareil.';
+        } else if (error.name === 'NotReadableError') {
+          errorMsg += 'La caméra est déjà utilisée par une autre application.';
+        } else {
+          errorMsg += 'Erreur: ' + error.message;
+        }
+        alert(errorMsg);
+      }
+    }
+
+    // ============ ARUCO DETECTION (Détection avancée avec validation de structure) ============
+    
+    // Calcul du threshold Otsu pour meilleure binarisation
+    function calculateOtsuThreshold(gray) {
+      const histogram = new Array(256).fill(0);
+      
+      for (let i = 0; i < gray.length; i++) {
+        histogram[Math.floor(gray[i])]++;
+      }
+
+      let sum = 0;
+      for (let i = 0; i < 256; i++) {
+        sum += i * histogram[i];
+      }
+
+      let sumB = 0;
+      let wB = 0;
+      let maxVariance = 0;
+      let threshold = 0;
+
+      for (let i = 0; i < 256; i++) {
+        wB += histogram[i];
+        if (wB === 0) continue;
+
+        const wF = gray.length - wB;
+        if (wF === 0) break;
+
+        sumB += i * histogram[i];
+        const mB = sumB / wB;
+        const mF = (sum - sumB) / wF;
+
+        const variance = wB * wF * (mB - mF) * (mB - mF);
+
+        if (variance > maxVariance) {
+          maxVariance = variance;
+          threshold = i;
+        }
+      }
+
+      return threshold;
+    }
+
+    // Vérifier si une zone correspond à un vrai marqueur ArUco
+    function validateArUcoStructure(binary, width, height, cx, cy, size) {
+      // CRITÈRE 1 : TAILLE MINIMALE ABSOLUE (empêche les petits points noirs)
+      if (size * 2 < MIN_MARKER_SIZE_PX) {
+        return { valid: false, confidence: 0, reason: 'Trop petit (< ' + MIN_MARKER_SIZE_PX + 'px)' };
+      }
+      
+      // Vérifier que tous les points sont dans l'image
+      if (cx - size < 5 || cy - size < 5 || cx + size >= width - 5 || cy + size >= height - 5) {
+        return { valid: false, confidence: 0, reason: 'Hors limites' };
+      }
+
+      // 1. VÉRIFICATION DE LA BORDURE NOIRE (doit être TRÈS noire)
+      let borderBlack = 0;
+      let borderTotal = 0;
+      const borderWidth = Math.max(3, Math.floor(size / 10));
+      
+      // Bordure supérieure
+      for (let x = cx - size; x <= cx + size; x++) {
+        for (let y = cy - size; y < cy - size + borderWidth; y++) {
+          if (binary[y * width + x] === 0) borderBlack++;
+          borderTotal++;
+        }
+      }
+      
+      // Bordure inférieure
+      for (let x = cx - size; x <= cx + size; x++) {
+        for (let y = cy + size - borderWidth; y <= cy + size; y++) {
+          if (binary[y * width + x] === 0) borderBlack++;
+          borderTotal++;
+        }
+      }
+      
+      // Bordure gauche
+      for (let y = cy - size; y <= cy + size; y++) {
+        for (let x = cx - size; x < cx - size + borderWidth; x++) {
+          if (binary[y * width + x] === 0) borderBlack++;
+          borderTotal++;
+        }
+      }
+      
+      // Bordure droite
+      for (let y = cy - size; y <= cy + size; y++) {
+        for (let x = cx + size - borderWidth; x <= cx + size; x++) {
+          if (binary[y * width + x] === 0) borderBlack++;
+          borderTotal++;
+        }
+      }
+      
+      const borderRatio = borderBlack / borderTotal;
+      
+      // CRITÈRE 2 : La bordure ArUco doit être au moins 93% noire (TRÈS STRICT)
+      if (borderRatio < 0.93) {
+        return { valid: false, confidence: Math.round(borderRatio * 100), reason: 'Bordure insuffisante: ' + Math.round(borderRatio * 100) + '%' };
+      }
+      
+      // CRITÈRE 3 : Vérifier la CONTINUITÉ de chaque côté de la bordure
+      const checkBorderContinuity = (x1, y1, x2, y2, isHorizontal) => {
+        let consecutiveBlack = 0;
+        let maxGap = 0;
+        let currentGap = 0;
+        
+        if (isHorizontal) {
+          for (let x = x1; x <= x2; x++) {
+            if (binary[y1 * width + x] === 0) {
+              consecutiveBlack++;
+              if (currentGap > maxGap) maxGap = currentGap;
+              currentGap = 0;
+            } else {
+              currentGap++;
+            }
+          }
+        } else {
+          for (let y = y1; y <= y2; y++) {
+            if (binary[y * width + x1] === 0) {
+              consecutiveBlack++;
+              if (currentGap > maxGap) maxGap = currentGap;
+              currentGap = 0;
+            } else {
+              currentGap++;
+            }
+          }
+        }
+        return maxGap < 5; // Pas de trou > 5px dans la bordure
+      };
+      
+      // Vérifier continuité des 4 côtés
+      const topContinuous = checkBorderContinuity(cx - size, cy - size, cx + size, cy - size, true);
+      const bottomContinuous = checkBorderContinuity(cx - size, cy + size, cx + size, cy + size, true);
+      const leftContinuous = checkBorderContinuity(cx - size, cy - size, cx - size, cy + size, false);
+      const rightContinuous = checkBorderContinuity(cx + size, cy - size, cx + size, cy + size, false);
+      
+      if (!topContinuous || !bottomContinuous || !leftContinuous || !rightContinuous) {
+        return { valid: false, confidence: 0, reason: 'Bordure non-continue (trous détectés)' };
+      }
+
+      // 2. VÉRIFICATION DE LA MATRICE INTERNE (structure en damier)
+      const innerSize = size - borderWidth * 2;
+      const cellSize = Math.floor(innerSize / 7); // ArUco utilise une grille 7x7
+      
+      if (cellSize < 3) {
+        return { valid: false, confidence: 0, reason: 'Cellules trop petites' };
+      }
+      
+      let blackCells = 0;
+      let whiteCells = 0;
+      let totalCells = 0;
+      
+      const startX = cx - innerSize / 2;
+      const startY = cy - innerSize / 2;
+      
+      for (let row = 0; row < 7; row++) {
+        for (let col = 0; col < 7; col++) {
+          let cellBlack = 0;
+          let cellTotal = 0;
+          
+          for (let dy = 0; dy < cellSize; dy++) {
+            for (let dx = 0; dx < cellSize; dx++) {
+              const px = Math.floor(startX + col * cellSize + dx);
+              const py = Math.floor(startY + row * cellSize + dy);
+              
+              if (px >= 0 && px < width && py >= 0 && py < height) {
+                if (binary[py * width + px] === 0) cellBlack++;
+                cellTotal++;
+              }
+            }
+          }
+          
+          if (cellTotal > 0) {
+            const cellRatio = cellBlack / cellTotal;
+            // Cellule considérée noire si > 70% noir, blanche si < 30% noir
+            if (cellRatio > 0.70) {
+              blackCells++;
+            } else if (cellRatio < 0.30) {
+              whiteCells++;
+            }
+            totalCells++;
+          }
+        }
+      }
+      
+      // Un vrai ArUco doit avoir un pattern binaire clair (pas de gris)
+      const binaryCellRatio = (blackCells + whiteCells) / totalCells;
+      const balanceRatio = Math.min(blackCells, whiteCells) / Math.max(blackCells, whiteCells);
+      
+      // CRITÈRE 4 : Doit avoir au moins 90% de cellules clairement noires OU blanches (TRÈS STRICT)
+      // Et un ratio noir/blanc entre 0.20 et 0.70 (pas tout noir ou tout blanc)
+      if (binaryCellRatio < 0.90) {
+        return { valid: false, confidence: Math.round(binaryCellRatio * 50), reason: 'Matrice floue: ' + Math.round(binaryCellRatio * 100) + '%' };
+      }
+      
+      if (balanceRatio < 0.20 || balanceRatio > 0.70) {
+        return { valid: false, confidence: 0, reason: 'Balance noir/blanc incorrecte: ' + Math.round(balanceRatio * 100) + '%' };
+      }
+      
+      // CRITÈRE 5 : Vérifier que les 4 coins sont présents et noirs
+      const cornerSize = Math.max(3, Math.floor(size / 15));
+      let cornersValid = 0;
+      const corners = [
+        [cx - size + cornerSize, cy - size + cornerSize], // Top-left
+        [cx + size - cornerSize, cy - size + cornerSize], // Top-right
+        [cx - size + cornerSize, cy + size - cornerSize], // Bottom-left
+        [cx + size - cornerSize, cy + size - cornerSize]  // Bottom-right
+      ];
+      
+      for (let [cornerX, cornerY] of corners) {
+        let cornerBlack = 0;
+        let cornerTotal = 0;
+        for (let dy = -cornerSize; dy <= cornerSize; dy++) {
+          for (let dx = -cornerSize; dx <= cornerSize; dx++) {
+            const px = cornerX + dx;
+            const py = cornerY + dy;
+            if (px >= 0 && px < width && py >= 0 && py < height) {
+              if (binary[py * width + px] === 0) cornerBlack++;
+              cornerTotal++;
+            }
+          }
+        }
+        if (cornerTotal > 0 && (cornerBlack / cornerTotal) > 0.85) cornersValid++;
+      }
+      
+      if (cornersValid < 4) {
+        return { valid: false, confidence: 0, reason: 'Coins incomplets: ' + cornersValid + '/4' };
+      }
+      
+      // SCORE DE CONFIANCE FINAL (tous critères passés)
+      const confidence = Math.round(
+        borderRatio * 40 + // 40% bordure
+        binaryCellRatio * 30 + // 30% binarité
+        balanceRatio * 20 + // 20% équilibre
+        (cornersValid / 4) * 10 // 10% coins
+      );
+      
+      return { 
+        valid: confidence > 85, // Seuil ULTRA-STRICT (85% minimum)
+        confidence: confidence,
+        borderRatio: borderRatio,
+        binaryCellRatio: binaryCellRatio,
+        balanceRatio: balanceRatio,
+        size: size * 2,
+        reason: 'OK'
+      };
+    }
+
+    // Chercher un marqueur ArUco complet
+    function findArUcoMarker(binary, width, height, cx, cy) {
+      // Tester différentes tailles de marqueur (tailles plus grandes pour éviter petits points)
+      const testSizes = [75, 100, 125, 150, 175];
+      let bestRejection = null; // Pour déboguer les rejets
+      
+      for (let size of testSizes) {
+        const validation = validateArUcoStructure(binary, width, height, cx, cy, size);
+        
+        if (validation.valid) {
+          return {
+            x: cx,
+            y: cy,
+            size: size * 2,
+            confidence: validation.confidence,
+            details: validation
+          };
+        } else {
+          // Garder le meilleur rejet pour déboguer
+          if (!bestRejection || validation.confidence > bestRejection.confidence) {
+            bestRejection = validation;
+          }
+        }
+      }
+      
+      // Logger les rejets ayant une confiance moyenne (pour voir ce qui est filtré)
+      if (bestRejection && bestRejection.confidence > 50) {
+        console.log('❌ Zone rejetée:', bestRejection.reason, '- Confiance:', bestRejection.confidence + '%');
+      }
+      
+      return null;
+    }
+
+    // Détection ArUco avancée
+    function detectArUcoMarkers(imageData) {
+      try {
+        const data = imageData.data;
+        const width = imageData.width;
+        const height = imageData.height;
+        const candidates = [];
+
+        // Convertir en niveaux de gris (formule de luminosité correcte)
+        const gray = new Array(width * height);
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const pixelIndex = i / 4;
+          gray[pixelIndex] = 0.299 * r + 0.587 * g + 0.114 * b;
+        }
+
+        // Otsu's thresholding automatique
+        const threshold = calculateOtsuThreshold(gray);
+        const binary = new Uint8Array(width * height);
+        for (let i = 0; i < gray.length; i++) {
+          binary[i] = gray[i] > threshold ? 255 : 0;
+        }
+
+        // Chercher les marqueurs ArUco avec un pas plus large (optimisation)
+        const step = 25; // Pas plus large pour être plus rapide
+
+        for (let y = 150; y < height - 150; y += step) {
+          for (let x = 150; x < width - 150; x += step) {
+            const marker = findArUcoMarker(binary, width, height, x, y);
+            
+            if (marker && marker.confidence > 85) {
+              const isDuplicate = candidates.some(m => 
+                Math.sqrt((m.x - marker.x) ** 2 + (m.y - marker.y) ** 2) < 100
+              );
+              
+              if (!isDuplicate) {
+                candidates.push(marker);
+                console.log('🎯 Marqueur ArUco trouvé ! Confiance:', marker.confidence + '%', 
+                           'Taille:', marker.size + 'px', marker.details);
+              }
+            }
+          }
+        }
+
+        // Trier par confiance et retourner les meilleurs
+        return candidates
+          .sort((a, b) => b.confidence - a.confidence)
+          .slice(0, 3); // Max 3 marqueurs
+      } catch (e) {
+        console.error('Erreur détection:', e);
+        return [];
+      }
+    }
+
+    function detectArUco() {
+      // Vérifier que la vidéo est prête
+      if (videoElement.readyState !== videoElement.HAVE_ENOUGH_DATA) {
+        return;
+      }
+
+      try {
+        // Dessiner la vidéo sur le canvas
+        imageCtx.drawImage(videoElement, 0, 0, imageCanvas.width, imageCanvas.height);
+        const imageData = imageCtx.getImageData(0, 0, imageCanvas.width, imageCanvas.height);
+
+        // Détecter les marqueurs ArUco
+        const markers = detectArUcoMarkers(imageData);
+
+        if (markers && markers.length > 0 && !markerLocked) {
+          const marker = markers[0]; // Prendre le meilleur marqueur
+          
+          // Convertir les coordonnées caméra en coordonnées écran
+          const posX = (marker.x / imageCanvas.width) * screenWidth;
+          const posY = (marker.y / imageCanvas.height) * screenHeight;
+          
+          // VALIDATION MULTI-FRAMES: le marqueur doit être détecté plusieurs fois de suite
+          if (lastMarkerPos) {
+            const distance = Math.sqrt(
+              (posX - lastMarkerPos.x) ** 2 + 
+              (posY - lastMarkerPos.y) ** 2
+            );
+            
+            // Si le marqueur est au même endroit (±40px), incrémenter le compteur
+            if (distance < 40 && marker.confidence > 85) {
+              consecutiveDetections++;
+              console.log('🔄 Détection stable', consecutiveDetections + '/' + REQUIRED_CONSECUTIVE_FRAMES, 
+                         '- Confiance:', marker.confidence + '%');
+              
+              // Mettre à jour l'interface de progression
+              const progressEl = document.getElementById('detectionProgress');
+              const progressText = document.getElementById('progressText');
+              const progressFill = document.getElementById('progressFill');
+              
+              if (progressEl && progressText && progressFill) {
+                progressEl.style.display = 'flex';
+                progressEl.classList.add('active');
+                progressText.textContent = consecutiveDetections + '/' + REQUIRED_CONSECUTIVE_FRAMES;
+                progressFill.style.width = (consecutiveDetections / REQUIRED_CONSECUTIVE_FRAMES * 100) + '%';
+              }
+              
+              // Verrouiller uniquement après détections consécutives
+              if (consecutiveDetections >= REQUIRED_CONSECUTIVE_FRAMES) {
+                arucoDetected = true;
+                console.log('✅ Marqueur ArUco VERROUILLÉ ! Confiance:', marker.confidence + '%');
+                console.log('📍 Position:', Math.round(posX), Math.round(posY));
+                addInitStatus('✅ Marqueur ArUco verrouillé !');
+                
+                markerPosition.x = posX;
+                markerPosition.y = posY;
+                markerLocked = true;
+                visionElement.classList.add('locked');
+                
+                // Cacher l'indicateur de progression
+                if (progressEl) progressEl.style.display = 'none';
+              }
+            } else {
+              // Position instable, réinitialiser
+              consecutiveDetections = 1;
+            }
+          } else {
+            consecutiveDetections = 1;
+          }
+          
+          lastMarkerPos = { x: posX, y: posY };
+          
+        } else if (!markers || markers.length === 0) {
+          arucoDetected = false;
+          consecutiveDetections = 0;
+          lastMarkerPos = null;
+          
+          // Cacher l'indicateur de progression
+          const progressEl = document.getElementById('detectionProgress');
+          if (progressEl) progressEl.style.display = 'none';
+        }
+        
+      } catch (error) {
+        console.error('⚠️ Erreur détection ArUco:', error.message);
+      }
+    }
+
+    // ============ ANIMATION LOOP ============
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Update FPS
+      const now = performance.now();
+      frameCount++;
+      if (now >= lastTime + 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = now;
+        document.getElementById('fpsDebug').textContent = fps;
+      }
+
+      // Détection ArUco
+      detectArUco();
+
+      // Positionner l'élément vision
+      if (markerLocked) {
+        // Élément verrouillé au marqueur
+        const element = visionElement;
+        let targetX = markerPosition.x - element.offsetWidth / 2;
+        let targetY = markerPosition.y - element.offsetHeight / 2;
+        
+        // Garder dans les limites de l'écran
+        targetX = Math.max(10, Math.min(targetX, screenWidth - element.offsetWidth - 10));
+        targetY = Math.max(10, Math.min(targetY, screenHeight - element.offsetHeight - 10));
+        
+        element.style.left = targetX + 'px';
+        element.style.top = targetY + 'px';
+        
+        document.getElementById('positionDebug').textContent = `${Math.round(targetX)}, ${Math.round(targetY)} [VERROUILLÉ]`;
+      } else {
+        // Animation flottante
+        floatingTime += 0.016; // ~60fps
+        
+        // Mouvement sinusoïdal smooth
+        const baseX = screenWidth / 2 - visionElement.offsetWidth / 2;
+        const baseY = screenHeight / 2 - visionElement.offsetHeight / 2;
+        
+        const offsetX = Math.sin(floatingTime * 0.3) * 100;
+        const offsetY = Math.cos(floatingTime * 0.25) * 80;
+        
+        let x = baseX + offsetX;
+        let y = baseY + offsetY;
+        
+        // Garder dans les limites
+        x = Math.max(10, Math.min(x, screenWidth - visionElement.offsetWidth - 10));
+        y = Math.max(10, Math.min(y, screenHeight - visionElement.offsetHeight - 10));
+        
+        visionElement.style.left = x + 'px';
+        visionElement.style.top = y + 'px';
+        
+        document.getElementById('positionDebug').textContent = `${Math.round(x)}, ${Math.round(y)} [FLOTTANT]`;
+      }
+
+      // Update status
+      if (markerLocked) {
+        document.getElementById('markerStatus').classList.add('detected');
+        document.getElementById('statusText').textContent = '🔒 Verrouillé ArUco';
+        document.getElementById('markerDebug').textContent = 'Détecté et verrouillé';
+      } else if (arucoDetected) {
+        document.getElementById('markerStatus').classList.add('detected');
+        document.getElementById('statusText').textContent = '✅ ArUco Détecté';
+        document.getElementById('markerDebug').textContent = 'Détecté';
+      } else {
+        document.getElementById('markerStatus').classList.remove('detected');
+        document.getElementById('statusText').textContent = '🔍 Recherche ArUco...';
+        document.getElementById('markerDebug').textContent = 'Non détecté';
+      }
+    }
+
+    // ============ INITIALIZATION ============
+    async function init() {
+      console.log('\n1️⃣ Initialisation système de détection...');
+      addInitStatus('🎯 Initialisation...');
+      document.getElementById('arucoStatus').textContent = '✅ Prêt';
+      
+      console.log('\n2️⃣ Initialisation caméra...');
+      await initCamera();
+
+      console.log('\n3️⃣ Démarrage animation...');
+      addInitStatus('✅ Animation démarrée');
+      animate();
+
+      // Centrer initialement l'élément vision
+      const centerX = screenWidth / 2 - visionElement.offsetWidth / 2;
+      const centerY = screenHeight / 2 - visionElement.offsetHeight / 2;
+      visionElement.style.left = centerX + 'px';
+      visionElement.style.top = centerY + 'px';
+
+      setTimeout(() => {
+        document.getElementById('loading').style.display = 'none';
+        addInitStatus('🎬 Application prête - Cherchez le marqueur ArUco!');
+      }, 1500);
+
+      console.log('\n═══════════════════════════════════════');
+      console.log('✅ APPLICATION PRÊTE !');
+      console.log('═══════════════════════════════════════');
+      console.log('💡 Montrez le marqueur ArUco noir à la caméra');
+    }
+
+    // Mettre à jour screenWidth/Height au redimensionnement
+    window.addEventListener('resize', () => {
+      screenWidth = window.innerWidth;
+      screenHeight = window.innerHeight;
+    });
+
+    // Start initialization
+    console.log('⏳ Attente du DOM...');
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
 </body>
 </html>

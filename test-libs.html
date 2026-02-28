@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test ArUco - Version CDN fiable</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      padding: 20px;
+    }
+    h1 { color: #0ff; }
+    .status { 
+      margin: 20px 0; 
+      padding: 10px; 
+      border: 2px solid #0f0; 
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .status.error { border-color: #f00; color: #f00; }
+    .status.success { border-color: #0f0; color: #0f0; }
+    .status.warning { border-color: #ff0; color: #ff0; }
+    #log { background: #111; border: 1px solid #0f0; padding: 10px; height: 200px; overflow-y: auto; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <h1>🎯 Test ArUco Detection</h1>
+  
+  <div class="status" id="libStatus">📦 Chargement bibliothèques...</div>
+  
+  <h2>Journal:</h2>
+  <div id="log"></div>
+
+  <!-- Essayer plusieurs CDN pour jsaruco -->
+  <script>
+    let arucoLoaded = false;
+    let attemptedCDNs = [];
+
+    function log(msg) {
+      const logDiv = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = msg;
+      logDiv.appendChild(line);
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function tryLoadCDN(cdnUrl, name) {
+      return new Promise((resolve) => {
+        log(`🔄 Tentative: ${name}`);
+        
+        const script = document.createElement('script');
+        script.src = cdnUrl;
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        
+        const timeout = setTimeout(() => {
+          log(`⏱️ Timeout: ${name}`);
+          resolve(false);
+        }, 5000);
+
+        script.onload = () => {
+          clearTimeout(timeout);
+          log(`✅ Chargé: ${name}`);
+          
+          // Attendre que le script s'initialise
+          setTimeout(() => {
+            if (typeof aruco !== 'undefined') {
+              log(`✅ aruco global disponible`);
+              arucoLoaded = true;
+              resolve(true);
+            } else {
+              log(`⚠️ aruco pas défini après chargement`);
+              resolve(false);
+            }
+          }, 500);
+        };
+        
+        script.onerror = () => {
+          clearTimeout(timeout);
+          log(`❌ Erreur: ${name}`);
+          resolve(false);
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadArUcoDependencies() {
+      const cdnList = [
+        {
+          url: 'https://cdnjs.cloudflare.com/ajax/libs/jsfeat/0.0.8/js/jsfeat-min.js',
+          name: 'jsfeat (CloudFlare)'
+        },
+        {
+          url: 'https://unpkg.com/jsfeat@0.0.8/js/jsfeat-min.js',
+          name: 'jsfeat (unpkg)'
+        },
+        {
+          url: 'https://cdn.jsdelivr.net/npm/jsfeat@0.0.8/js/jsfeat-min.js',
+          name: 'jsfeat (jsDelivr)'
+        }
+      ];
+
+      log('\n🔍 Recherche jsfeat + aruco...\n');
+
+      for (let cdn of cdnList) {
+        const loaded = await tryLoadCDN(cdn.url, cdn.name);
+        attemptedCDNs.push({ name: cdn.name, success: loaded });
+        if (loaded) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      // Essayer aruco.js
+      if (typeof jsfeat !== 'undefined' || typeof cv !== 'undefined') {
+        log('\n✅ Dépendances détectées\n');
+        log('🔄 Tentative aruco.js...');
+        
+        const arucoLoaded = await tryLoadCDN(
+          'https://inspirit.github.io/js-aruco/js/aruco.js',
+          'aruco (inspirit)'
+        );
+
+        if (!arucoLoaded) {
+          log('⚠️ aruco.js non disponible depuis inspirit');
+          log('\nAlternative: Utiliser détection simple localStorage');
+          localStorage.setItem('useSimpleDetection', 'true');
+        }
+      }
+
+      updateStatus();
+    }
+
+    function updateStatus() {
+      const el = document.getElementById('libStatus');
+      
+      if (typeof aruco !== 'undefined') {
+        el.textContent = '✅ ArUco: Prêt';
+        el.className = 'status success';
+        log('\n✅✅✅ PRÊT POUR DÉTECTION ARUCO ✅✅✅');
+        log('Ouvrez: http://localhost:8000/test-aruco.html');
+      } else if (localStorage.getItem('useSimpleDetection')) {
+        el.textContent = '⚠️ Mode simple (détection basée contours)';
+        el.className = 'status warning';
+        log('\n⚠️ Utilisant mode détection simple');
+        log('Ouvrez: http://localhost:8000/aruco-simple.html');
+      } else {
+        el.textContent = '❌ Erreur: ArUco non disponible par CDN';
+        el.className = 'status error';
+        log('\n❌ Impossible de charger ArUco');
+        log('Accédez à http://localhost:8000/aruco-simple.html (version simple)');
+        localStorage.setItem('useSimpleDetection', 'true');
+      }
+    }
+
+    window.addEventListener('load', loadArUcoDependencies);
+  </script>
+</body>
+</html>

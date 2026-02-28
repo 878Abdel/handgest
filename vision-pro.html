@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Pro - Hand Tracking</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      z-index: 1;
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 2;
+    }
+
+    /* UI PRINCIPALE */
+    #ui {
+      position: fixed;
+      width: 900px;
+      height: 600px;
+      background: rgba(15, 15, 20, 0.85);
+      backdrop-filter: blur(40px);
+      border-radius: 40px;
+      border: 2px solid rgba(100, 200, 255, 0.3);
+      padding: 40px;
+      z-index: 100;
+      box-shadow: 
+        0 40px 100px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 0 80px rgba(100, 200, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    #ui.active {
+      border-color: rgba(100, 200, 255, 0.6);
+      box-shadow: 
+        0 40px 100px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 rgba(100, 200, 255, 0.5),
+        0 0 120px rgba(100, 200, 255, 0.3);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    h1 {
+      font-size: 42px;
+      font-weight: 900;
+      color: #fff;
+      background: linear-gradient(135deg, #fff 0%, #64c8ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badges {
+      display: flex;
+      gap: 12px;
+    }
+
+    .badge {
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(100, 200, 255, 0.2);
+      border-radius: 20px;
+      color: #ff6b6b;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.3s;
+    }
+
+    .badge.on {
+      color: #4ade80;
+      border-color: rgba(74, 222, 128, 0.4);
+      background: rgba(74, 222, 128, 0.1);
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.2);
+    }
+
+    .content {
+      overflow-y: auto;
+      height: 460px;
+    }
+
+    .content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .content::-webkit-scrollbar-thumb {
+      background: rgba(100, 200, 255, 0.3);
+      border-radius: 4px;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .card {
+      aspect-ratio: 9/12;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: flex-end;
+      padding: 16px;
+    }
+
+    .card:hover {
+      transform: translateY(-8px) scale(1.03);
+      box-shadow: 0 20px 50px rgba(100, 200, 255, 0.2);
+      border-color: rgba(100, 200, 255, 0.4);
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+    }
+
+    /* CURSEUR */
+    #cursor {
+      position: fixed;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    .cursor-dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: radial-gradient(circle, #64c8ff, rgba(100, 200, 255, 0.3));
+      border: 2px solid #64c8ff;
+      border-radius: 50%;
+      box-shadow: 0 0 20px rgba(100, 200, 255, 0.8);
+      transform: translate(-50%, -50%);
+    }
+
+    .cursor-line {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 2px;
+      background: linear-gradient(to bottom, rgba(100, 200, 255, 0.8), transparent);
+      box-shadow: 0 0 10px rgba(100, 200, 255, 0.6);
+      transform: translateX(-50%);
+    }
+
+    /* STATS */
+    #stats {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      color: #64c8ff;
+      font-size: 11px;
+      font-family: monospace;
+      z-index: 99;
+      line-height: 1.8;
+    }
+
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      border-radius: 20px;
+      padding: 40px 60px;
+      color: #64c8ff;
+      font-size: 18px;
+      z-index: 999;
+      text-align: center;
+    }
+
+    .loading.hide {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <div class="loading" id="loading">
+    ⏳ Chargement...<br>
+    <small style="font-size: 14px; color: #888;">Autorisez la caméra</small>
+  </div>
+
+  <div id="ui">
+    <div class="header">
+      <h1>✨ Vision Pro</h1>
+      <div class="badges">
+        <div class="badge" id="handBadge">👋 <span id="handText">—</span></div>
+        <div class="badge" id="pinchBadge">👆 <span id="pinchText">—</span></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="section">
+        <div class="section-title">À l'affiche</div>
+        <div class="grid">
+          <div class="card" style="background: linear-gradient(135deg, #E53935, #B71C1C);"><div class="card-title">CHERRY</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #FF6F00, #E65100);"><div class="card-title">BATMAN</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #7B1FA2, #4A148C);"><div class="card-title">DUNE</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #0277BD, #01579B);"><div class="card-title">INCEPTION</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #C2185B, #880E4F);"><div class="card-title">BARBIE</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #1565C0, #0D47A1);"><div class="card-title">OPPENHEIMER</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Trending</div>
+        <div class="grid">
+          <div class="card" style="background: linear-gradient(135deg, #F57C00, #E65100);"><div class="card-title">MISSION</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #455A64, #263238);"><div class="card-title">TWISTERS</div></div>
+          <div class="card" style="background: linear-gradient(135deg, #6A1B9A, #4A148C);"><div class="card-title">JOËLLE</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cursor">
+    <div class="cursor-dot"></div>
+    <div class="cursor-line"></div>
+  </div>
+
+  <div id="stats">
+    FPS: <span id="fps">0</span><br>
+    Mains: <span id="hands">0</span><br>
+    Pinch: <span id="pinch">—</span><br>
+    Cursor: <span id="pos">0, 0</span>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const ui = document.getElementById('ui');
+    const cursor = document.getElementById('cursor');
+    const loading = document.getElementById('loading');
+
+    let state = {
+      hands: [],
+      cursor: { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+      pinch: false,
+      uiPos: { x: window.innerWidth / 2 - 450, y: window.innerHeight / 2 - 300 }
+    };
+
+    // Position UI au centre
+    ui.style.left = state.uiPos.x + 'px';
+    ui.style.top = state.uiPos.y + 'px';
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // CAMÉRA
+    async function initCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 }
+        });
+        video.srcObject = stream;
+        console.log('✓ Caméra OK');
+        setTimeout(() => loading.classList.add('hide'), 1000);
+      } catch (e) {
+        console.error('Caméra erreur:', e);
+        loading.innerHTML = '❌ Erreur caméra<br><small>Vérifiez les permissions</small>';
+      }
+    }
+
+    // MEDIAPIPE
+    let handsModel;
+    async function initHands() {
+      try {
+        handsModel = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        handsModel.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.7,
+          minTrackingConfidence: 0.5
+        });
+
+        handsModel.onResults(onResults);
+
+        const cameraUtils = new Camera(video, {
+          onFrame: async () => {
+            await handsModel.send({ image: video });
+          },
+          width: 1280,
+          height: 720
+        });
+
+        cameraUtils.start();
+        console.log('✓ Hand tracking OK');
+      } catch (e) {
+        console.error('MediaPipe erreur:', e);
+      }
+    }
+
+    function onResults(results) {
+      state.hands = results.multiHandLandmarks || [];
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (state.hands.length > 0) {
+        updateCursor();
+        detectPinch();
+        drawHands();
+        updateUI();
+      }
+
+      updateStats();
+    }
+
+    function updateCursor() {
+      const hand = state.hands[0];
+      const index = hand[8];
+
+      state.cursor.x = (1 - index.x) * window.innerWidth;
+      state.cursor.y = index.y * window.innerHeight;
+
+      cursor.style.left = state.cursor.x + 'px';
+      cursor.style.top = state.cursor.y + 'px';
+
+      const line = cursor.querySelector('.cursor-line');
+      line.style.height = '250px';
+    }
+
+    function detectPinch() {
+      const hand = state.hands[0];
+      const thumb = hand[4];
+      const index = hand[8];
+
+      const dist = Math.hypot(
+        (index.x - thumb.x) * window.innerWidth,
+        (index.y - thumb.y) * window.innerHeight
+      );
+
+      state.pinch = dist < 30;
+    }
+
+    function drawHands() {
+      state.hands.forEach((hand, i) => {
+        // Connections
+        const connections = [
+          [0,1],[1,2],[2,3],[3,4],
+          [0,5],[5,6],[6,7],[7,8],
+          [0,9],[9,10],[10,11],[11,12],
+          [0,13],[13,14],[14,15],[15,16],
+          [0,17],[17,18],[18,19],[19,20]
+        ];
+
+        connections.forEach(([a, b]) => {
+          const p1 = hand[a];
+          const p2 = hand[b];
+
+          const x1 = (1 - p1.x) * window.innerWidth;
+          const y1 = p1.y * window.innerHeight;
+          const x2 = (1 - p2.x) * window.innerWidth;
+          const y2 = p2.y * window.innerHeight;
+
+          ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        });
+
+        // Points
+        hand.forEach((p, idx) => {
+          const x = (1 - p.x) * window.innerWidth;
+          const y = p.y * window.innerHeight;
+
+          ctx.fillStyle = idx === 4 || idx === 8 ? '#ff6b6b' : '#64c8ff';
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      });
+    }
+
+    function updateUI() {
+      const handBadge = document.getElementById('handBadge');
+      const pinchBadge = document.getElementById('pinchBadge');
+
+      if (state.hands.length > 0) {
+        handBadge.classList.add('on');
+        document.getElementById('handText').textContent = state.hands.length;
+        ui.classList.add('active');
+      } else {
+        handBadge.classList.remove('on');
+        document.getElementById('handText').textContent = '—';
+        ui.classList.remove('active');
+      }
+
+      if (state.pinch) {
+        pinchBadge.classList.add('on');
+        document.getElementById('pinchText').textContent = 'ON';
+      } else {
+        pinchBadge.classList.remove('on');
+        document.getElementById('pinchText').textContent = '—';
+      }
+
+      // Drag UI avec main
+      if (state.hands.length > 0 && !state.pinch) {
+        const palm = state.hands[0][0];
+        const targetX = (1 - palm.x) * window.innerWidth - 450;
+        const targetY = palm.y * window.innerHeight - 300;
+
+        state.uiPos.x += (targetX - state.uiPos.x) * 0.1;
+        state.uiPos.y += (targetY - state.uiPos.y) * 0.1;
+
+        ui.style.left = state.uiPos.x + 'px';
+        ui.style.top = state.uiPos.y + 'px';
+      }
+    }
+
+    let frameCount = 0;
+    let lastTime = Date.now();
+
+    function updateStats() {
+      frameCount++;
+      const now = Date.now();
+      const delta = (now - lastTime) / 1000;
+
+      if (delta >= 1) {
+        document.getElementById('fps').textContent = Math.round(frameCount / delta);
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      document.getElementById('hands').textContent = state.hands.length;
+      document.getElementById('pinch').textContent = state.pinch ? '✓' : '—';
+      document.getElementById('pos').textContent = 
+        Math.round(state.cursor.x) + ', ' + Math.round(state.cursor.y);
+    }
+
+    // INIT
+    initCamera();
+    setTimeout(initHands, 1000);
+
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    });
+
+    console.log('✨ Vision Pro ready!');
+  </script>
+</body>
+</html>

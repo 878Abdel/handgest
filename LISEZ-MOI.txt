@@ -1,0 +1,68 @@
+╔════════════════════════════════════════════════════════════╗
+║     🎯 ÉCRAN VIRTUEL AR - VERSION SIMPLIFIÉE              ║
+╚════════════════════════════════════════════════════════════╝
+
+✅ PROJET NETTOYÉ ET SIMPLIFIÉ !
+
+📦 FICHIERS RESTANTS :
+   ✓ index.html          - Application complète (tout-en-un)
+   ✓ generate_aruco.py   - Générateur de marqueurs
+   ✓ aruco_marker_id_0.png - Marqueur prêt à imprimer
+   ✓ START.bat           - Lanceur Windows
+   ✓ README.md           - Documentation simple
+
+🗑️  SUPPRIMÉ :
+   ✗ Hand tracking (script.js, styles.css)
+   ✗ Mode VR avancé (vr-aruco.html/js)
+   ✗ Fichiers de test
+   ✗ Documentation complexe
+
+════════════════════════════════════════════════════════════
+
+🚀 POUR LANCER :
+
+1️⃣  Imprimer le marqueur :
+    → aruco_marker_id_0.png est déjà généré !
+    
+2️⃣  Double-cliquer sur START.bat
+    OU en terminal : python -m http.server 8000
+
+3️⃣  Ouvrir dans le navigateur :
+    → http://localhost:8000/index.html
+
+4️⃣  Autoriser la caméra et montrer le marqueur !
+
+════════════════════════════════════════════════════════════
+
+✨ CE QUE ÇA FAIT :
+
+📷 Affiche votre webcam en arrière-plan
+🎯 Détecte le marqueur ArUco en temps réel
+📱 Affiche un écran virtuel 3D
+🔗 L'écran se fixe automatiquement au marqueur
+🎮 L'écran suit le marqueur si vous le bougez
+
+════════════════════════════════════════════════════════════
+
+🎨 CARACTÉRISTIQUES :
+
+▸ SIMPLE : 1 seul fichier HTML
+▸ PAS de hand tracking
+▸ PAS de modes multiples
+▸ PAS de complexité inutile
+▸ JUSTE : Caméra + ArUco + Écran 3D
+
+════════════════════════════════════════════════════════════
+
+💡 CONSEILS :
+
+• Imprimez le marqueur en A4 minimum
+• Assurez un bon éclairage
+• Tenez le marqueur bien droit face à la caméra
+• Attendez 3-5 secondes pour le chargement d'OpenCV
+
+════════════════════════════════════════════════════════════
+
+📖 DOCUMENTATION : Voir README.md
+
+✅ Le projet est maintenant PROPRE et FONCTIONNEL !

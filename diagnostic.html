@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Diagnostic Complet</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Courier New', monospace;
+      background: #1a1a2e;
+      color: white;
+      font-size: 14px;
+    }
+    h1 { color: #8be9fd; margin-bottom: 20px; }
+    .test {
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #8be9fd;
+      border-radius: 5px;
+    }
+    .success { border-left-color: #51cf66; }
+    .error { border-left-color: #ff6b6b; }
+    .waiting { border-left-color: #ffd93d; }
+    .result {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #console-log {
+      background: #000;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 5px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .log-line {
+      margin: 3px 0;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Diagnostic Complet</h1>
+
+  <div class="test waiting" id="test-browser">
+    <div>🌐 Test navigateur</div>
+    <div class="result" id="result-browser">En cours...</div>
+  </div>
+
+  <div class="test waiting" id="test-camera">
+    <div>📷 Test accès caméra</div>
+    <div class="result" id="result-camera">En cours...</div>
+  </div>
+
+  <div class="test waiting" id="test-three">
+    <div>📦 Test Three.js</div>
+    <div class="result" id="result-three">En cours...</div>
+  </div>
+
+  <div class="test waiting" id="test-opencv">
+    <div>🔷 Test OpenCV.js</div>
+    <div class="result" id="result-opencv">En cours...</div>
+  </div>
+
+  <div id="console-log">
+    <div style="color: #8be9fd; margin-bottom: 10px;">📋 Journal des événements:</div>
+  </div>
+
+  <!-- Fonction OpenCV callback - AVANT le chargement d'OpenCV.js -->
+  <script>
+    let opencvReady = false;
+    window.onOpenCvReady = function() {
+      console.log('✅ OpenCV.js chargé');
+      opencvReady = true;
+    };
+  </script>
+
+  <script async src="https://docs.opencv.org/4.6.0/opencv.js" onload="onOpenCvReady()"></script>
+
+  <script type="module">
+    import * as THREE from './three.core.js';
+    window.THREE = THREE;
+    const logDiv = document.getElementById('console-log');
+    let opencvReady = false;
+
+    function log(message, color = '#8be9fd') {
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.style.color = color;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logDiv.appendChild(line);
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(message);
+    }
+
+    function setTestResult(testId, status, message) {
+      const testDiv = document.getElementById('test-' + testId);
+      const resultDiv = document.getElementById('result-' + testId);
+      
+      testDiv.className = 'test ' + (status === 'success' ? 'success' : status === 'error' ? 'error' : 'waiting');
+      resultDiv.textContent = (status === 'success' ? '✅ ' : status === 'error' ? '❌ ' : '⏳ ') + message;
+    }
+
+    // Test 1: Navigateur
+    log('🚀 Début des tests de diagnostic');
+    log('1️⃣ Test navigateur...');
+
+    const userAgent = navigator.userAgent;
+    const isChromeOrEdge = /Chrome|Edge/.test(userAgent);
+    const isFirefox = /Firefox/.test(userAgent);
+
+    if (isChromeOrEdge || isFirefox) {
+      setTestResult('browser', 'success', 'Navigateur compatible détecté');
+      log('✅ Navigateur: ' + (isChromeOrEdge ? 'Chrome/Edge' : 'Firefox'), '#51cf66');
+    } else {
+      setTestResult('browser', 'error', 'Navigateur non recommandé');
+      log('⚠️ Navigateur: ' + userAgent, '#ffd93d');
+    }
+
+    log('📍 URL: ' + window.location.href);
+    log('🖥️ Résolution: ' + window.innerWidth + 'x' + window.innerHeight);
+
+    // Test 2: Caméra
+    log('2️⃣ Test caméra...');
+    setTestResult('camera', 'waiting', 'Demande d\'accès...');
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+          setTestResult('camera', 'success', 'Caméra accessible');
+          log('✅ Caméra: Accès accordé', '#51cf66');
+          
+          const tracks = stream.getVideoTracks();
+          if (tracks.length > 0) {
+            const settings = tracks[0].getSettings();
+            log('   Résolution: ' + (settings.width || '?') + 'x' + (settings.height || '?'), '#51cf66');
+          }
+          
+          // Arrêter le stream
+          stream.getTracks().forEach(track => track.stop());
+        })
+        .catch(error => {
+          setTestResult('camera', 'error', error.name + ': ' + error.message);
+          log('❌ Caméra: ' + error.name, '#ff6b6b');
+          log('   ' + error.message, '#ff6b6b');
+        });
+    } else {
+      setTestResult('camera', 'error', 'getUserMedia non supporté');
+      log('❌ getUserMedia non disponible', '#ff6b6b');
+    }
+
+    // Test 3: Three.js
+    log('3️⃣ Test Three.js...');
+    setTimeout(() => {
+      if (typeof THREE !== 'undefined') {
+        setTestResult('three', 'success', 'Three.js r' + THREE.REVISION + ' chargé');
+        log('✅ Three.js: Version r' + THREE.REVISION, '#51cf66');
+        
+        // Test création scène
+        try {
+          const scene = new THREE.Scene();
+          const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+          log('   Scène de test créée avec succès', '#51cf66');
+        } catch (e) {
+          log('   ⚠️ Erreur création scène: ' + e.message, '#ffd93d');
+        }
+      } else {
+        setTestResult('three', 'error', 'Three.js non chargé');
+        log('❌ Three.js: Non chargé', '#ff6b6b');
+      }
+    }, 500);
+
+    // Test 4: OpenCV.js
+    log('4️⃣ Test OpenCV.js (peut prendre 5-10 secondes)...');
+    setTestResult('opencv', 'waiting', 'Chargement...');
+
+    function onOpenCvReady() {
+      if (typeof cv !== 'undefined') {
+        opencvReady = true;
+        setTestResult('opencv', 'success', 'OpenCV.js chargé');
+        log('✅ OpenCV.js: Chargé et prêt', '#51cf66');
+        
+        // Test création Mat
+        try {
+          const mat = new cv.Mat(100, 100, cv.CV_8UC4);
+          mat.delete();
+          log('   Mat de test créé avec succès', '#51cf66');
+          
+          // Test dictionnaire ArUco
+          const dict = cv.getPredefinedDictionary(cv.DICT_5X5_100);
+          log('   Dictionnaire ArUco DICT_5X5_100 chargé', '#51cf66');
+        } catch (e) {
+          log('   ⚠️ Erreur test OpenCV: ' + e.message, '#ffd93d');
+        }
+        
+        log('\n═══════════════════════════════════════');
+        log('✅ TOUS LES TESTS TERMINÉS', '#51cf66');
+        log('═══════════════════════════════════════');
+      } else {
+        setTimeout(onOpenCvReady, 100);
+      }
+    }
+
+    // Timeout pour OpenCV
+    setTimeout(() => {
+      if (!opencvReady) {
+        setTestResult('opencv', 'error', 'Timeout - Vérifier connexion internet');
+        log('❌ OpenCV.js: Timeout après 30 secondes', '#ff6b6b');
+        log('   Vérifiez votre connexion internet', '#ff6b6b');
+      }
+    }, 30000);
+  </script>
+
+  <script async src="https://docs.opencv.org/4.6.0/opencv.js" onload="onOpenCvReady()"></script>
+</body>
+</html>

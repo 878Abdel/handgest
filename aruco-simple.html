@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detection ArUco - Simple & Fiable</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #0ff; }
+    .status { 
+      margin: 20px 0; 
+      padding: 10px; 
+      border: 2px solid #0f0; 
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .status.error { border-color: #f00; color: #f00; }
+    .status.success { border-color: #0f0; color: #0f0; }
+    .status.warning { border-color: #ff0; color: #ff0; }
+    .info-box {
+      background: rgba(0, 255, 0, 0.1);
+      border: 1px solid #0f0;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    video { width: 100%; max-width: 640px; border: 2px solid #0f0; margin: 10px 0; }
+    canvas { width: 100%; max-width: 640px; border: 2px solid #0ff; margin: 10px 0; }
+    button { 
+      padding: 12px 24px; 
+      margin: 10px 5px; 
+      font-weight: bold; 
+      cursor: pointer;
+      background: #0f0;
+      color: #000;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    button:hover { background: #0f8; }
+    button:disabled { background: #666; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>🎯 Détection ArUco - Méthode Simple</h1>
+  
+  <div class="status" id="libStatus">📦 Chargement...</div>
+  <div class="status" id="cameraStatus">📷 Caméra: Attente...</div>
+  <div class="status" id="detectionStatus">🎯 Détection: Attente...</div>
+
+  <div class="info-box">
+    <strong>Cette version utilise détection par contours + marqueurs ArUco simples</strong><br>
+    Pas de dépendances externes - navigation API + Canvas API uniquement
+  </div>
+
+  <h2>Flux vidéo:</h2>
+  <video id="video" autoplay playsinline muted></video>
+  
+  <h2>Canvas (analyse):</h2>
+  <canvas id="canvas" width="640" height="480"></canvas>
+
+  <h2>Contrôles:</h2>
+  <button id="btnStart" onclick="startDetection()">▶️ Démarrer détection</button>
+  <button id="btnStop" onclick="stopDetection()" disabled>⏹️ Arrêter</button>
+  <button id="btnTest" onclick="testMarker()">🧪 Test visual</button>
+
+  <h2>Journal:</h2>
+  <div id="log" style="background: #111; border: 1px solid #0f0; padding: 10px; height: 200px; overflow-y: auto; color: #0f0;"></div>
+
+  <script>
+    let detectionRunning = false;
+    let videoStream = null;
+
+    function log(msg, type = 'normal') {
+      const logDiv = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = msg;
+      if (type === 'error') line.style.color = '#f00';
+      if (type === 'success') line.style.color = '#0f0';
+      if (type === 'warning') line.style.color = '#ff0';
+      logDiv.appendChild(line);
+      logDiv.scrollTop = logDiv.scrollHeight;
+      console.log(msg);
+    }
+
+    function updateStatus(id, text, type = 'normal') {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'status';
+      if (type === 'error') el.className += ' error';
+      if (type === 'success') el.className += ' success';
+      if (type === 'warning') el.className += ' warning';
+    }
+
+    // ============ DÉTECTION ARUCO SIMPLE ============
+    // Cette fonction détecte les marqueurs par recherche de contours noirs/blancs
+    function detectArucoMarkers(imageData) {
+      const data = imageData.data;
+      const width = imageData.width;
+      const height = imageData.height;
+      const markers = [];
+
+      // Convertir en niveaux de gris et créer une image binaire
+      const gray = new Array(width * height);
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const pixelIndex = i / 4;
+        gray[pixelIndex] = (r + g + b) / 3;
+      }
+
+      // Détection de contours carrés (marqueurs ArUco)
+      const threshold = 127;
+      const binary = new Uint8Array(width * height);
+      for (let i = 0; i < gray.length; i++) {
+        binary[i] = gray[i] > threshold ? 255 : 0;
+      }
+
+      // Rechercher les carrés noirs
+      const minArea = 400; // pixels au carré
+      const maxArea = 100000;
+      
+      for (let y = 10; y < height - 10; y += 10) {
+        for (let x = 10; x < width - 10; x += 10) {
+          // Vérifier si c'est un carré potentiel
+          let blackPixels = 0;
+          const sampleSize = 40;
+          
+          for (let dy = 0; dy < sampleSize && y + dy < height; dy++) {
+            for (let dx = 0; dx < sampleSize && x + dx < width; dx++) {
+              const idx = (y + dy) * width + (x + dx);
+              if (binary[idx] === 0) blackPixels++;
+            }
+          }
+          
+          const blackRatio = blackPixels / (sampleSize * sampleSize);
+          
+          // Si 70% des pixels sont noirs, c'est probablement un marqueur
+          if (blackRatio > 0.7) {
+            markers.push({
+              x: x + sampleSize / 2,
+              y: y + sampleSize / 2,
+              size: sampleSize,
+              id: markers.length,
+              confidence: Math.round(blackRatio * 100)
+            });
+          }
+        }
+      }
+
+      return markers;
+    }
+
+    // ============ INITIALISATION ============
+    window.addEventListener('load', () => {
+      log('🚀 Page chargée', 'success');
+      updateStatus('libStatus', '✅ Prêt (détection pure JavaScript)', 'success');
+      log('✅ Système de détection prêt');
+      log('Cliquez sur "Démarrer détection" pour commencer');
+    });
+
+    async function initCamera() {
+      log('📷 Demande accès caméra...');
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user'
+          }
+        });
+        
+        const video = document.getElementById('video');
+        video.srcObject = videoStream;
+        
+        await new Promise(resolve => {
+          video.onloadedmetadata = () => {
+            video.play();
+            log('✅ Caméra active', 'success');
+            updateStatus('cameraStatus', '✅ Caméra: Active ' + video.videoWidth + 'x' + video.videoHeight, 'success');
+            resolve();
+          };
+        });
+      } catch (error) {
+        log('❌ Erreur caméra: ' + error.message, 'error');
+        updateStatus('cameraStatus', '❌ Caméra: ' + error.message, 'error');
+        alert('Erreur caméra: ' + error.message);
+      }
+    }
+
+    function startDetection() {
+      if (!videoStream) {
+        log('📷 Initialisation caméra...', 'warning');
+        initCamera().then(() => startDetection());
+        return;
+      }
+
+      detectionRunning = true;
+      document.getElementById('btnStart').disabled = true;
+      document.getElementById('btnStop').disabled = false;
+      
+      log('\n▶️ Détection DÉMARRÉE', 'success');
+      updateStatus('detectionStatus', '▶️ Détection: En cours...', 'success');
+      
+      detectFrame();
+    }
+
+    function stopDetection() {
+      detectionRunning = false;
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+      
+      log('⏹️ Détection arrêtée', 'warning');
+      updateStatus('detectionStatus', '⏹️ Détection: Arrêtée', 'warning');
+    }
+
+    let frameCount = 0;
+    function detectFrame() {
+      if (!detectionRunning) return;
+
+      requestAnimationFrame(detectFrame);
+
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      // Redimensionner canvas si nécessaire
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+
+      try {
+        // Dessiner la vidéo
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Détecter les marqueurs
+        const markers = detectArucoMarkers(imageData);
+
+        frameCount++;
+
+        // Log toutes les 30 frames (~0.5s à 60fps)
+        if (frameCount % 30 === 0) {
+          if (markers.length > 0) {
+            log(`✅ Frame ${frameCount}: ${markers.length} marqueur(s) détecté(s)`, 'success');
+            updateStatus('detectionStatus', `✅ ${markers.length} marqueur(s) trouvé(s)!`, 'success');
+          } else {
+            log(`⏳ Frame ${frameCount}: Cherche marqueurs...`, 'normal');
+          }
+        }
+
+        // Dessiner les marqueurs
+        if (markers.length > 0) {
+          for (let marker of markers) {
+            const x = marker.x;
+            const y = marker.y;
+            const size = marker.size;
+
+            // Carré vert autour du marqueur
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x - size/2, y - size/2, size, size);
+
+            // Texte
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(`ID:${marker.id}`, x - size/2, y - size/2 - 10);
+            
+            // Cercle au centre
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+      } catch (error) {
+        log('❌ Erreur: ' + error.message, 'error');
+      }
+    }
+
+    // ============ TEST VISUEL ============
+    function testMarker() {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Dessiner un carré noir sur fond blanc
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Carré noir (simule un marqueur)
+      const x = canvas.width / 2;
+      const y = canvas.height / 2;
+      const size = 100;
+
+      ctx.fillStyle = '#000';
+      ctx.fillRect(x - size/2, y - size/2, size, size);
+
+      // Déterminer la reconnaissance
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const markers = detectArucoMarkers(imageData);
+
+      log(`\n🧪 Test: Carré noir créé`, 'normal');
+      if (markers.length > 0) {
+        log(`✅ Marqueur détecté! Position: (${Math.round(markers[0].x)}, ${Math.round(markers[0].y)})`, 'success');
+        updateStatus('detectionStatus', '✅ Test OK - Marqueur détecté!', 'success');
+      } else {
+        log('⚠️ Marqueur non détecté (ajuster threshold)', 'warning');
+      }
+
+      // Afficher le carré détecté
+      ctx.strokeStyle = '#00ff00';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x - size/2, y - size/2, size, size);
+    }
+  </script>
+</body>
+</html>

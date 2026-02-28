@@ -1,0 +1,37 @@
+╔══════════════════════════════════════════════╗
+║                                              ║
+║     ✨ VISION PRO - VERSION SIMPLE ✨        ║
+║                                              ║
+╚══════════════════════════════════════════════╝
+
+
+📦 FICHIERS (SEULEMENT 2!)
+───────────────────────────────────────
+✅ vision-pro.html ......... LA PAGE (ouvrir celle-ci!)
+✅ README-SIMPLE.md ......... Instructions
+
+
+🚀 DÉMARRAGE (2 ÉTAPES)
+───────────────────────────────────────
+1. Lancez le serveur:
+   python -m http.server 8000
+
+2. Ouvrez dans le navigateur:
+   http://localhost:8000/vision-pro.html
+
+
+🎮 CONTRÔLES
+───────────────────────────────────────
+👋 Main Ouverte    → Déplace l'UI
+👆 Pincement       → Clic
+
+
+💡 IMPORTANT
+───────────────────────────────────────
+✓ Autorisez la caméra
+✓ Chrome/Edge recommandé
+✓ Bonne lumière
+✓ 60-80cm de distance
+
+
+✨ C'EST TOUT! Profitez! ✨

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test ArUco Detection avec JS-ArUco</title>
+  <style>
+    body {
+      font-family: monospace;
+      background: #000;
+      color: #0f0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 { color: #0ff; }
+    .status { margin: 20px 0; padding: 10px; border: 2px solid #0f0; border-radius: 5px; }
+    .status.error { border-color: #f00; color: #f00; }
+    .status.success { border-color: #0f0; color: #0f0; }
+    .status.warning { border-color: #ff0; color: #ff0; }
+    video { width: 400px; margin: 10px 0; border: 2px solid #0f0; display: none; }
+    canvas { width: 400px; border: 2px solid #0ff; margin: 10px 0; }
+    button { padding: 10px 20px; margin: 5px; font-weight: bold; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🎯 TEST DÉTECTION ARUCO</h1>
+  
+  <div id="log"></div>
+
+  <div class="status" id="libStatus">📦 Bibliothèque: Chargement...</div>
+  <div class="status" id="cameraStatus">📷 Caméra: Attente...</div>
+  <div class="status" id="detectionStatus">🎯 Détection: Attente...</div>
+
+  <h2>Flux vidéo (caché):</h2>
+  <video id="video" autoplay playsinline muted></video>
+  
+  <h2>Canvas de détection (draggable pour repositionner):</h2>
+  <canvas id="canvas" width="1280" height="720"></canvas>
+
+  <h2>Contrôles:</h2>
+  <button onclick="startDetection()">▶️ Démarrer détection</button>
+  <button onclick="stopDetection()">⏹️ Arrêter</button>
+
+  <!-- jsfeat - bibliothèque de traitement d'image léger -->
+  <script src="https://inspirit.github.io/jsfeat-min.js"></script>
+  
+  <!-- JS-Aruco - détection de marqueurs ArUco -->
+  <script src="https://inspirit.github.io/js-aruco/js/aruco.js"></script>
+
+  <script>
+    let detectionRunning = false;
+    let videoStream = null;
+    let arucoDetector = null;
+
+    function log(msg, type = 'normal') {
+      const logDiv = document.getElementById('log');
+      const line = document.createElement('div');
+      line.textContent = msg;
+      if (type === 'error') line.style.color = '#f00';
+      if (type === 'success') line.style.color = '#0f0';
+      if (type === 'warning') line.style.color = '#ff0';
+      logDiv.appendChild(line);
+      console.log(msg);
+    }
+
+    function updateStatus(id, text, type = 'normal') {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'status';
+      if (type === 'error') el.className += ' error';
+      if (type === 'success') el.className += ' success';
+      if (type === 'warning') el.className += ' warning';
+    }
+
+    // Initialisation au chargement
+    window.addEventListener('load', () => {
+      log('🚀 Page chargée');
+      
+      // Vérifier si jsaruco est disponible
+      setTimeout(() => {
+        if (typeof aruco !== 'undefined' && typeof aruco.detectMarkers === 'function') {
+          log('✅ jsaruco chargé avec succès', 'success');
+          updateStatus('libStatus', '✅ jsaruco: Disponible', 'success');
+          
+          // Créer le détecteur ArUco
+          try {
+            arucoDetector = new aruco.Detector();
+            log('✅ Détecteur ArUco créé', 'success');
+            updateStatus('libStatus', '✅ jsaruco: Prêt', 'success');
+          } catch (e) {
+            log('❌ Erreur création détecteur: ' + e.message, 'error');
+            updateStatus('libStatus', '❌ jsaruco: Erreur détecteur', 'error');
+          }
+        } else {
+          log('⚠️ jsaruco pas disponible', 'warning');
+          updateStatus('libStatus', '⚠️ jsaruco: Pas disponible', 'warning');
+        }
+      }, 1000);
+    });
+
+    async function initCamera() {
+      log('\n📷 Demande accès caméra...');
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          }
+        });
+        
+        const video = document.getElementById('video');
+        video.srcObject = videoStream;
+        
+        await new Promise(resolve => {
+          video.onloadedmetadata = () => {
+            video.play();
+            log('✅ Caméra démarrée', 'success');
+            updateStatus('cameraStatus', '✅ Caméra: Active', 'success');
+            resolve();
+          };
+        });
+      } catch (error) {
+        log('❌ Erreur caméra: ' + error.message, 'error');
+        updateStatus('cameraStatus', '❌ Caméra: ' + error.message, 'error');
+      }
+    }
+
+    function startDetection() {
+      if (!arucoDetector) {
+        log('❌ Détecteur pas prêt', 'error');
+        return;
+      }
+
+      if (!videoStream) {
+        log('📷 Initialisation caméra...', 'warning');
+        initCamera().then(() => startDetection());
+        return;
+      }
+
+      detectionRunning = true;
+      log('\n▶️ Détection démarrée', 'success');
+      updateStatus('detectionStatus', '▶️ Détection: En cours', 'success');
+      
+      detectFrame();
+    }
+
+    function stopDetection() {
+      detectionRunning = false;
+      log('⏹️ Détection arrêtée', 'warning');
+      updateStatus('detectionStatus', '⏹️ Détection: Arrêtée', 'warning');
+    }
+
+    let detectionCount = 0;
+    function detectFrame() {
+      if (!detectionRunning) return;
+
+      requestAnimationFrame(detectFrame);
+
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+
+      try {
+        // Dessiner la vidéo sur le canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // Détecter les marqueurs
+        const markers = arucoDetector.detect(canvas);
+
+        detectionCount++;
+
+        if (detectionCount % 30 === 0) { // Log toutes les 30 frames (~0.5s à 60fps)
+          if (markers && markers.length > 0) {
+            log(`✅ ${markers.length} marqueur(s) détecté(s)! ID: ${markers.map(m => m.id).join(', ')}`, 'success');
+            updateStatus('detectionStatus', `✅ ${markers.length} marqueur(s) trouvé(s)!`, 'success');
+          } else {
+            log(`❌ Aucun marqueur (frame ${detectionCount})`, 'warning');
+            updateStatus('detectionStatus', '❌ Aucun marqueur détecté', 'warning');
+          }
+        }
+
+        // Dessiner les marqueurs détectés
+        if (markers && markers.length > 0) {
+          for (let i = 0; i < markers.length; i++) {
+            const marker = markers[i];
+            
+            // Contour du marqueur
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            for (let j = 0; j < marker.corners.length; j++) {
+              const corner = marker.corners[j];
+              if (j === 0) ctx.moveTo(corner.x, corner.y);
+              else ctx.lineTo(corner.x, corner.y);
+            }
+            
+            // Fermer le contour
+            const firstCorner = marker.corners[0];
+            ctx.lineTo(firstCorner.x, firstCorner.y);
+            ctx.stroke();
+            
+            // ID du marqueur
+            const centerX = marker.corners.reduce((sum, c) => sum + c.x, 0) / marker.corners.length;
+            const centerY = marker.corners.reduce((sum, c) => sum + c.y, 0) / marker.corners.length;
+            
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('ID:' + marker.id, centerX - 20, centerY - 10);
+            
+            // Rayon de détection
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 50, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+
+      } catch (error) {
+        log('❌ Erreur détection: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

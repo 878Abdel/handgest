@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Écran Virtuel AR - ArUco</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #000;
+    }
+
+    #videoBackground {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+    }
+
+    #hud {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 2px solid rgba(139, 233, 253, 0.4);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 13px;
+      color: #8be9fd;
+      font-family: 'Courier New', monospace;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+      min-width: 300px;
+    }
+
+    #hud .title {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(139, 233, 253, 0.3);
+      color: #fff;
+    }
+
+    #hud .row {
+      margin: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    #hud .label {
+      color: #8be9fd;
+      opacity: 0.7;
+    }
+
+    #hud .value {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    #aruco-status {
+      color: #ff6b6b;
+      font-weight: 700;
+    }
+
+    #aruco-status.detected {
+      color: #51cf66;
+    }
+
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: white;
+      font-size: 20px;
+      z-index: 200;
+      text-align: center;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 30px 50px;
+      border-radius: 15px;
+      pointer-events: none;
+    }
+
+    .loading.hidden {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Vidéo background (webcam) -->
+  <video id="videoBackground" autoplay playsinline muted></video>
+
+  <!-- Canvas Three.js pour afficher l'écran virtuel -->
+  <canvas id="canvas"></canvas>
+
+  <!-- HUD d'information -->
+  <div id="hud">
+    <div class="title">🎯 Écran Virtuel AR</div>
+    <div class="row">
+      <span class="label">Marqueur ArUco:</span>
+      <span class="value" id="aruco-status">Recherche...</span>
+    </div>
+    <div class="row">
+      <span class="label">Position:</span>
+      <span class="value" id="pose-xyz">--</span>
+    </div>
+    <div class="row">
+      <span class="label">FPS:</span>
+      <span class="value" id="fps-display">--</span>
+    </div>
+    <div class="row">
+      <span class="label">Caméra:</span>
+      <span class="value" id="camera-status">Init...</span>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div id="loading-text">⏳ Chargement OpenCV.js...</div>
+    <div style="font-size: 14px; margin-top: 10px; opacity: 0.7;">La caméra démarre en arrière-plan</div>
+    <div id="init-status" style="font-size: 12px; margin-top: 20px; text-align: left; max-width: 400px;">
+      <div>⏳ Chargement librairies...</div>
+    </div>
+  </div>
+
+  <!-- Canvas caché pour détection ArUco -->
+  <canvas id="imageCanvas" style="display: none;"></canvas>
+
+  <!-- Librairies - Charger Three.js en tant que module -->
+  <script type="module" src="./three-import.js"></script>
+  
+  <!-- Fonction OpenCV callback - AVANT le chargement d'OpenCV.js -->
+  <script>
+    window.onOpenCvReady = function() {
+      console.log('✅ OpenCV.js chargé et prêt');
+      if (typeof opencvReady !== 'undefined') {
+        opencvReady = true;
+      }
+    };
+  </script>
+  
+  <script async src="https://docs.opencv.org/4.6.0/opencv.js" onload="onOpenCvReady()"></script>
+
+  <script>
+    // ============ DEBUG MODE ============
+    console.log('═══════════════════════════════════════');
+    console.log('🚀 DÉMARRAGE APPLICATION AR');
+    console.log('═══════════════════════════════════════');
+    
+    // Fonction pour ajouter status dans UI
+    function addInitStatus(message, isError = false) {
+      const statusDiv = document.getElementById('init-status');
+      if (statusDiv) {
+        const line = document.createElement('div');
+        line.textContent = message;
+        line.style.color = isError ? '#ff6b6b' : '#8be9fd';
+        statusDiv.appendChild(line);
+      }
+      console.log(message);
+    }
+    
+    // ============ VARIABLES GLOBALES ============
+    let scene, camera, renderer;
+    let virtualScreen = null;
+    let videoElement = document.getElementById('videoBackground');
+    let canvasElement = document.getElementById('canvas');
+    let imageCanvas = document.getElementById('imageCanvas');
+    let imageCtx = imageCanvas.getContext('2d');
+    
+    let opencvReady = false;
+    let arucoDetected = false;
+    let markerPosition = { x: 0, y: 0, z: -5 };
+    let markerScale = 1;
+    
+    let fps = 0;
+    let frameCount = 0;
+    let lastTime = performance.now();
+
+    // ============ INITIALISATION THREE.JS ============
+    function initThreeJS() {
+      try {
+        addInitStatus('📦 Chargement Three.js...');
+        console.log('📦 Initialisation Three.js...');
+        
+        // Vérifier que Three.js est chargé
+        if (typeof THREE === 'undefined') {
+          addInitStatus('❌ THREE.js pas chargé !', true);
+          console.error('❌ THREE.js pas chargé !');
+          alert('Erreur: Three.js non chargé. Rechargez la page.');
+          return false;
+        }
+        
+        addInitStatus('✓ THREE.js version: r' + THREE.REVISION);
+        console.log('✓ THREE.js version:', THREE.REVISION);
+        
+        // Scène
+        scene = new THREE.Scene();
+        scene.background = null; // Transparent pour voir la vidéo
+        console.log('✓ Scène créée');
+
+        // Caméra
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          0.1,
+          1000
+        );
+        camera.position.z = 5;
+        console.log('✓ Caméra créée');
+
+        // Renderer
+        addInitStatus('✓ Renderer 3D créé');
+        renderer = new THREE.WebGLRenderer({
+          canvas: canvasElement,
+          alpha: true,
+          antialias: true
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        console.log('✓ Renderer créé');
+
+        // Lumières
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+        console.log('✓ Lumières ajoutées');
+
+        // Créer l'écran virtuel
+        createVirtualScreen();
+        console.log('✓ Écran virtuel créé');
+
+        addInitStatus('✅ Three.js initialisé');
+        // Responsive
+        window.addEventListener('resize', () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        console.log('✅ Three.js initialisé avec succès');
+        return true;
+        
+      } catch (error) {
+        console.error('❌ Erreur initThreeJS:', error);
+        alert('Erreur Three.js: ' + error.message);
+        return false;
+      }
+    }
+
+    // ============ CRÉATION ÉCRAN VIRTUEL ============
+    function createVirtualScreen() {
+      try {
+        console.log('🖥️ Création écran virtuel...');
+        
+        // Écran plat style tablette/moniteur
+        const screenGroup = new THREE.Group();
+
+      // Écran principal
+      const screenGeometry = new THREE.BoxGeometry(4, 2.5, 0.1);
+      const screenMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1a1a2e,
+        metalness: 0.4,
+        roughness: 0.6,
+        emissive: 0x001a4d,
+        emissiveIntensity: 0.3
+      });
+
+      const screenMesh = new THREE.Mesh(screenGeometry, screenMaterial);
+      screenGroup.add(screenMesh);
+
+      // Bordure de l'écran
+      const edgeGeometry = new THREE.EdgesGeometry(screenGeometry);
+      const edgeMaterial = new THREE.LineBasicMaterial({
+        color: 0x8be9fd,
+        linewidth: 2
+      });
+      const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+      screenGroup.add(edges);
+
+      // Surface vitrée devant
+      const glassGeometry = new THREE.PlaneGeometry(3.8, 2.3);
+      const glassMaterial = new THREE.MeshBasicMaterial({
+        color: 0x8be9fd,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide
+      });
+      const glassMesh = new THREE.Mesh(glassGeometry, glassMaterial);
+      glassMesh.position.z = 0.06;
+      screenGroup.add(glassMesh);
+
+      // Texte sur l'écran (optionnel, peut afficher du contenu)
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      
+      // Fond dégradé
+      const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+      gradient.addColorStop(0, '#667eea');
+      gradient.addColorStop(1, '#764ba2');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 512, 256);
+      
+      // Texte
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 40px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Écran Virtuel AR', 256, 100);
+      ctx.font = '24px Arial';
+      ctx.fillText('Fixé au marqueur ArUco', 256, 150);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      const contentGeometry = new THREE.PlaneGeometry(3.6, 1.8);
+      const contentMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true
+      });
+      const contentMesh = new THREE.Mesh(contentGeometry, contentMaterial);
+      contentMesh.position.z = 0.07;
+      screenGroup.add(contentMesh);
+
+      // Cacher par défaut
+      screenGroup.visible = false;
+      screenGroup.position.set(0, 0, -5);
+
+      scene.add(screenGroup);
+      virtualScreen = screenGroup;
+      
+      console.log('✅ Écran virtuel créé avec succès');
+      
+    } catch (error) {
+      console.error('❌ Erreur createVirtualScreen:', error);
+      throw error;
+    }
+
+    // ============ INITIALISATION CAMÉRA ============
+    async function initCamera() {
+      addInitStatus('📷 Demande accès caméra...');
+        console.log('📷 Demande d\'accès caméra...');
+        document.getElementById('camera-status').textContent = '⏳ Demande...';
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: false
+        });
+
+        addInitStatus('✅ Accès caméra accordé !');
+        console.log('✓ Accès caméra accordé');
+        videoElement.srcObject = stream;
+        
+        videoElement.onloadedmetadata = () => {
+          videoElement.play();
+          imageCanvas.width = videoElement.videoWidth;
+          imageCanvas.height = videoElement.videoHeight;
+          document.getElementById('camera-status').textContent = '✓ Active';
+          addInitStatus('✅ Caméra active: ' + videoElement.videoWidth + 'x' + videoElement.videoHeight);
+          console.log('✓ Caméra initialisée:', videoElement.videoWidth, 'x', videoElement.videoHeight);
+        };
+      } catch (error) {
+        console.error('❌ Erreur caméra:', error);
+        document.getElementById('camera-status').textContent = '✗ Erreur';
+        
+        let errorMsg = 'Impossible d\'accéder à la caméra.\n\n';
+        
+        if (error.name === 'NotAllowedError') {
+          errorMsg += 'Vous avez refusé l\'accès à la caméra.\n';
+          errorMsg += 'Autorisez l\'accès dans les paramètres du navigateur.';
+        } else if (error.name === 'NotFoundError') {
+          errorMsg += 'Aucune caméra détectée sur cet appareil.';
+        } else if (error.name === 'NotReadableError') {
+          errorMsg += 'La caméra est déjà utilisée par une autre application.';
+        } else {
+          errorMsg += 'Erreur: ' + error.message;
+        }
+        
+        alert(errorMsg);
+      }
+    }
+
+    // ============ DÉTECTION ARUCO ============
+    function detectArUco() {
+      if (!opencvReady || videoElement.readyState !== videoElement.HAVE_ENOUGH_DATA) {
+        return;
+      }
+
+      try {
+        // Capturer le frame de la vidéo
+        imageCtx.drawImage(videoElement, 0, 0, imageCanvas.width, imageCanvas.height);
+        const imageData = imageCtx.getImageData(0, 0, imageCanvas.width, imageCanvas.height);
+
+        // Convertir en Mat OpenCV
+        let img = cv.matFromImageData(imageData);
+        let gray = new cv.Mat();
+        cv.cvtColor(img, gray, cv.COLOR_RGBA2GRAY);
+
+        // Détection ArUco
+        let dictionary = cv.getPredefinedDictionary(cv.DICT_5X5_100);
+        let parameters = new cv.DetectorParameters();
+        let detector = new cv.ArucoDetector(dictionary, parameters);
+
+        let markerCorners = new cv.MatVector();
+        let markerIds = new cv.Mat();
+        let rejectedCandidates = new cv.MatVector();
+
+        detector.detectMarkers(gray, markerCorners, markerIds, rejectedCandidates);
+
+        const numMarkers = markerCorners.size();
+
+        if (numMarkers > 0) {
+          if (!arucoDetected) {
+            console.log('✓ Marqueur ArUco détecté !');
+          }
+          arucoDetected = true;
+          document.getElementById('aruco-status').textContent = `✓ Détecté (${numMarkers})`;
+          document.getElementById('aruco-status').classList.add('detected');
+
+          // Récupérer les coins du premier marqueur
+          let corners = markerCorners.get(0);
+          
+          // Calculer le centre
+          let centerX = 0, centerY = 0;
+          for (let i = 0; i < 4; i++) {
+            centerX += corners.data32F[i * 2];
+            centerY += corners.data32F[i * 2 + 1];
+          }
+          centerX /= 4;
+          centerY /= 4;
+
+          // Calculer la taille du marqueur
+          const p1x = corners.data32F[0];
+          const p1y = corners.data32F[1];
+          const p2x = corners.data32F[2];
+          const p2y = corners.data32F[3];
+          const size = Math.sqrt((p2x - p1x) ** 2 + (p2y - p1y) ** 2);
+
+          // Convertir en coordonnées 3D pour Three.js
+          const scaleX = (centerX - imageCanvas.width / 2) / (imageCanvas.width / 10);
+          const scaleY = -(centerY - imageCanvas.height / 2) / (imageCanvas.height / 10);
+          const scaleZ = -5 + (size / 100); // Distance basée sur la taille
+
+          markerPosition.x = scaleX;
+          markerPosition.y = scaleY;
+          markerPosition.z = scaleZ;
+          markerScale = size / 150;
+
+          // Afficher la position
+          document.getElementById('pose-xyz').textContent = 
+            `X: ${markerPosition.x.toFixed(2)}, Y: ${markerPosition.y.toFixed(2)}, Z: ${markerPosition.z.toFixed(2)}`;
+
+          // Afficher l'écran virtuel
+          if (virtualScreen) {
+            virtualScreen.visible = true;
+          }
+
+          corners.delete();
+        } else {
+          if (arucoDetected) {
+            console.log('✗ Marqueur perdu');
+          }
+          arucoDetected = false;
+          document.getElementById('aruco-status').textContent = 'Recherche...';
+          document.getElementById('aruco-status').classList.remove('detected');
+          
+          // Cacher l'écran virtuel
+          if (virtualScreen) {
+            virtualScreen.visible = false;
+          }
+        }
+
+        // Nettoyage
+        markerCorners.delete();
+        markerIds.delete();
+        rejectedCandidates.delete();
+        img.delete();
+        gray.delete();
+        
+      } catch (error) {
+        console.warn('Erreur détection ArUco:', error.message);
+      }
+    }
+
+    // ============ BOUCLE D'ANIMATION ============
+    let animationStarted = false;
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (!animationStarted) {
+        console.log('🎬 Boucle d\'animation démarrée');
+        animationStarted = true;
+      }
+
+      try {
+        // Détecter ArUco
+        detectArUco();
+
+        // Mettre à jour la position de l'écran virtuel
+        if (arucoDetected && virtualScreen) {
+        // Interpolation douce
+        virtualScreen.position.x += (markerPosition.x - virtualScreen.position.x) * 0.1;
+        virtualScreen.position.y += (markerPosition.y - virtualScreen.position.y) * 0.1;
+        virtualScreen.position.z += (markerPosition.z - virtualScreen.position.z) * 0.1;
+        
+        // Rotation légère pour effet
+        virtualScreen.rotation.y = Math.sin(Date.now() * 0.0005) * 0.1;
+      }
+
+      // Calculer FPS
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime > 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = now;
+        document.getElementById('fps-display').textContent = fps;
+      }
+
+      // Rendu Three.js
+      if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur dans animate():', error);
+      // Ne pas arrêter la boucle d'animation même en cas d'erreur
+    }
+    }
+
+    // ============ CALLBACK OPENCV ============
+    function onOpenCvReady() {
+      console.log('📦 Callback OpenCV appelé');
+      if (typeof cv !== 'undefined') {
+        opencvReady = true;
+        console.log('✅ OpenCV.js chargé et prêt (version:', cv.getBuildInformation ? 'disponible' : 'inconnue', ')');
+        document.getElementById('loading').classList.add('hidden');
+      } else {
+        console.log('⏳ OpenCV pas encore prêt, réessai...');
+        setTimeout(onOpenCvReady, 100);
+      }
+    }
+
+    // ============ DÉMARRAGE ============
+    async function init() {
+      try {
+        addInitStatus('═══════════════════════════');
+        addInitStatus('🚀 DÉMARRAGE APPLICATION');
+        addInitStatus('═══════════════════════════');
+        
+        console.log('\n═══════════════════════════════════════');
+        console.log('🚀 INITIALISATION APPLICATION');
+        console.log('═══════════════════════════════════════');
+        console.log('📍 URL:', window.location.href);
+        console.log('🌐 Navigateur:', navigator.userAgent);
+        console.log('🖥️ Résolution:', window.innerWidth, 'x', window.innerHeight);
+        
+        // Vérifier Three.js
+        if (typeof THREE === 'undefined') {
+          addInitStatus('⏳ Attente Three.js...', true);
+          throw new Error('THREE.js non chargé');
+        }
+        addInitStatus('✓ THREE.js détecté');
+        console.log('✓ THREE.js détecté');
+        
+        // Démarrer Three.js
+        addInitStatus('\n1️⃣ Three.js...');
+        console.log('\n1️⃣ Initialisation Three.js...');
+        const threeOk = initThreeJS();
+        if (!threeOk) {
+          throw new Error('Échec initialisation Three.js');
+        }
+        
+        // Démarrer la caméra
+        addInitStatus('\n2️⃣ Caméra webcam...');
+        console.log('\n2️⃣ Initialisation de la caméra...');
+        await initCamera();
+        console.log('✅ Caméra prête');
+        
+        // Démarrer l'animation
+        addInitStatus('\n3️⃣ Animation 3D...');
+        console.log('\n3️⃣ Démarrage de la boucle d\'animation...');
+        animate();
+        addInitStatus('✅ Animation démarrée');
+        console.log('✅ Animation démarrée');
+
+        // Cacher l'écran de chargement après succès
+        setTimeout(() => {
+          document.getElementById('loading').style.display = 'none';
+        }, 2000);
+
+        console.log('\n═══════════════════════════════════════');
+        console.log('✅ APPLICATION DÉMARRÉE AVEC SUCCÈS !');
+        console.log('═══════════════════════════════════════');
+        console.log('⏳ Attente chargement OpenCV.js pour détection ArUco...');
+        console.log('💡 Vous devriez voir votre webcam en arrière-plan');
+        
+        // Vérifier périodiquement si OpenCV est chargé
+        const checkOpenCV = setInterval(() => {
+          if (opencvReady) {
+            console.log('\n✅ OpenCV.js chargé - Détection ArUco activée');
+            console.log('🎯 Montrez le marqueur ArUco à la caméra !');
+            clearInterval(checkOpenCV);
+          }
+        }, 1000);
+        
+      } catch (error) {
+        addInitStatus('❌ ERREUR: ' + error.message, true);
+        console.error('\n❌ ERREUR FATALE lors de l\'initialisation:');
+        console.error(error);
+        alert('Erreur fatale: ' + error.message + '\n\nOuvrez la console (F12) pour plus de détails.');
+      }
+    }
+
+    // Attendre que Three.js soit chargé (depuis le module)
+    function waitForThree() {
+      console.log('📄 Script principal chargé - Attente THREE.js...');
+      if (typeof THREE !== 'undefined') {
+        console.log('✓ THREE.js disponible!');
+        addInitStatus('✓ THREE.js chargé');
+        init();
+      } else {
+        console.log('⏳ THREE.js pas encore chargé, attente...');
+        setTimeout(waitForThree, 100);
+      }
+    }
+
+    // Démarrer au chargement de la page
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', waitForThree);
+    } else {
+      waitForThree();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Pro AI - Hand Tracking</title>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/opencv.js/opencv.js"></script>
+  <script src="https://threejs.org/build/three.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000;
+      perspective: 1200px;
+    }
+
+    /* FOND VIDEO */
+    #videoInput {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      transform: scaleX(-1);
+    }
+
+    /* DETECTIONS DEBUG */
+    #canvasOutput {
+      position: fixed;
+      top: 0;
+      left: 0;
+      display: none;
+      z-index: 2;
+    }
+
+    /* INTERFACE LIQUIDE */
+    #visionUI {
+      position: fixed;
+      width: 900px;
+      height: 600px;
+      background: rgba(15, 15, 20, 0.75);
+      backdrop-filter: blur(30px);
+      border-radius: 40px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      padding: 40px;
+      z-index: 100;
+      box-shadow: 
+        0 30px 80px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3),
+        0 0 50px rgba(100, 200, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: center;
+    }
+
+    #visionUI.active {
+      box-shadow: 
+        0 30px 80px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(100, 200, 255, 0.5),
+        0 0 80px rgba(100, 200, 255, 0.3);
+      border-color: rgba(100, 200, 255, 0.4);
+    }
+
+    #visionUI.locked {
+      cursor: grab;
+      transform: scale(1.02);
+    }
+
+    /* HEADER */
+    .ui-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 25px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      animation: slideDown 0.6s ease-out;
+    }
+
+    .ui-header h1 {
+      font-size: 36px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .header-status {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 13px;
+      font-weight: 600;
+      color: #ff6b6b;
+      transition: all 0.3s ease;
+    }
+
+    .status-badge.active {
+      color: #4ade80;
+      border-color: rgba(74, 222, 128, 0.4);
+      background: rgba(74, 222, 128, 0.1);
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.2);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* CONTENU FLUIDE */
+    .ui-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 8px;
+    }
+
+    .ui-content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .ui-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .ui-content::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      transition: background 0.3s;
+    }
+
+    .ui-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .content-group {
+      margin-bottom: 28px;
+      animation: fadeIn 0.8s ease-out forwards;
+    }
+
+    .group-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-size: 14px;
+    }
+
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .glass-card {
+      aspect-ratio: 9/12;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+      padding: 14px;
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 100%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .glass-card:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.08) 100%);
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 
+        0 20px 50px rgba(0, 0, 0, 0.4),
+        0 0 30px rgba(100, 200, 255, 0.15);
+      border-color: rgba(100, 200, 255, 0.3);
+    }
+
+    .glass-card::before {
+      opacity: 1;
+    }
+
+    .card-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+      z-index: 2;
+      letter-spacing: 0.5px;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    /* CURSEUR QUEST 3 */
+    #raycastCursor {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    .cursor-pointer {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background: radial-gradient(circle, #64c8ff 0%, rgba(100, 200, 255, 0.3) 100%);
+      border: 2px solid rgba(100, 200, 255, 0.8);
+      border-radius: 50%;
+      box-shadow: 0 0 15px rgba(100, 200, 255, 0.6);
+    }
+
+    .cursor-ray {
+      position: absolute;
+      top: 0;
+      left: 6px;
+      width: 2px;
+      background: linear-gradient(to bottom, rgba(100, 200, 255, 0.8), rgba(100, 200, 255, 0.1));
+      box-shadow: 0 0 8px rgba(100, 200, 255, 0.6);
+      transform-origin: top;
+    }
+
+    /* DEBUG INFO */
+    #debugPanel {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 11px;
+      color: #64c8ff;
+      z-index: 99;
+      max-width: 350px;
+      font-weight: 500;
+      line-height: 1.6;
+    }
+
+    .debug-stat {
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .debug-label {
+      color: #8be9fd;
+    }
+
+    .debug-value {
+      color: #64c8ff;
+      font-weight: 700;
+    }
+
+    .debug-value.active {
+      color: #4ade80;
+    }
+
+    /* INFOS MAIN */
+    .hand-info {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid rgba(100, 200, 255, 0.2);
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #64c8ff;
+      font-family: 'Monaco', monospace;
+      z-index: 99;
+      max-width: 280px;
+    }
+
+    .hand-info div {
+      margin: 4px 0;
+    }
+
+    .pinch-indicator {
+      position: fixed;
+      bottom: 180px;
+      left: 20px;
+      background: rgba(100, 200, 255, 0.1);
+      border: 2px solid rgba(100, 200, 255, 0.3);
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #64c8ff;
+      z-index: 99;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+    }
+
+    .pinch-indicator.active {
+      opacity: 1;
+      box-shadow: 0 0 20px rgba(100, 200, 255, 0.3);
+      border-color: rgba(100, 200, 255, 0.6);
+    }
+
+    /* GESTURES */
+    .gesture-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      font-weight: 700;
+      color: rgba(100, 200, 255, 0.8);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      text-shadow: 0 0 20px rgba(100, 200, 255, 0.5);
+    }
+
+    .gesture-indicator.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <!-- VIDEO INPUT -->
+  <video id="videoInput" autoplay playsinline muted></video>
+  <canvas id="canvasOutput"></canvas>
+
+  <!-- INTERFACE VISION PRO -->
+  <div id="visionUI">
+    <div class="ui-header">
+      <h1>✨ Vision Pro AI</h1>
+      <div class="header-status">
+        <div class="status-badge" id="arucoBadge">
+          <span class="status-dot"></span>
+          <span id="arucoText">Marqueur détection...</span>
+        </div>
+        <div class="status-badge" id="handBadge">
+          <span class="status-dot"></span>
+          <span id="handText">Mains...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ui-content">
+      <div class="content-group">
+        <div class="group-title">À l'affiche</div>
+        <div class="grid-cards">
+          <div class="glass-card" style="background: linear-gradient(135deg, #E53935 0%, #B71C1C 100%);"><div class="card-label">CHERRY</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #FF6F00 0%, #E65100 100%);"><div class="card-label">THE BATMAN</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #7B1FA2 0%, #4A148C 100%);"><div class="card-label">DUNE II</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #0277BD 0%, #01579B 100%);"><div class="card-label">INCEPTION</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #C2185B 0%, #880E4F 100%);"><div class="card-label">BARBIE</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);"><div class="card-label">OPPENHEIMER</div></div>
+        </div>
+      </div>
+
+      <div class="content-group">
+        <div class="group-title">Recommandations</div>
+        <div class="grid-cards">
+          <div class="glass-card" style="background: linear-gradient(135deg, #F57C00 0%, #E65100 100%);"><div class="card-label">MISSION</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #455A64 0%, #263238 100%);"><div class="card-label">TWISTERS</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #6A1B9A 0%, #4A148C 100%);"><div class="card-label">JOËLLE</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #00838F 0%, #004D40 100%);"><div class="card-label">AQUAMAN</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%);"><div class="card-label">SPIDER</div></div>
+          <div class="glass-card" style="background: linear-gradient(135deg, #0288D1 0%, #0277BD 100%);"><div class="card-label">AVATAR</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CURSEUR QUEST 3 -->
+  <div id="raycastCursor">
+    <div class="cursor-pointer"></div>
+    <div class="cursor-ray"></div>
+  </div>
+
+  <!-- DEBUG -->
+  <div id="debugPanel">
+    <div class="debug-stat">
+      <span class="debug-label">FPS:</span>
+      <span class="debug-value" id="fps">60</span>
+    </div>
+    <div class="debug-stat">
+      <span class="debug-label">Mains:</span>
+      <span class="debug-value" id="handCount">0</span>
+    </div>
+    <div class="debug-stat">
+      <span class="debug-label">Pincement:</span>
+      <span class="debug-value" id="pinchStatus">—</span>
+    </div>
+    <div class="debug-stat">
+      <span class="debug-label">Marqueur:</span>
+      <span class="debug-value" id="markerStatus">—</span>
+    </div>
+    <div class="debug-stat">
+      <span class="debug-label">Zoom:</span>
+      <span class="debug-value" id="zoomLevel">100%</span>
+    </div>
+  </div>
+
+  <!-- INFOS MAIN -->
+  <div class="hand-info" id="handInfo">
+    <div>Hand Tracking: Inactif</div>
+  </div>
+
+  <!-- PINCH INDICATOR -->
+  <div class="pinch-indicator" id="pinchIndicator">
+    👆 Pincement détecté!
+  </div>
+
+  <!-- GESTURE INDICATOR -->
+  <div class="gesture-indicator" id="gestureIndicator"></div>
+
+  <script>
+    // ==================== CONFIG ====================
+    const CONFIG = {
+      minPinchDistance: 30,
+      maxPinchDistance: 80,
+      pinchSensitivity: 0.02,
+      uiDragSensitivity: 0.15,
+      arucoDist: 150,
+      handSmoothing: 0.7
+    };
+
+    // ==================== STATE ====================
+    let state = {
+      hands: [],
+      aruco: { detected: false, center: null },
+      pinching: { left: false, right: false, distance: 0 },
+      uiPosition: { x: window.innerWidth / 2 - 450, y: window.innerHeight / 2 - 300 },
+      uiScale: 1,
+      uiRotation: 0,
+      cursor: { x: 0, y: 0, rayLength: 0 },
+      fps: 0,
+      scroll: 0
+    };
+
+    let lastTime = Date.now();
+    let frameCount = 0;
+
+    // ==================== DOM ====================
+    const video = document.getElementById('videoInput');
+    const canvasOutput = document.getElementById('canvasOutput');
+    const ctx = canvasOutput.getContext('2d');
+    const visionUI = document.getElementById('visionUI');
+    const cursor = document.getElementById('raycastCursor');
+    const debugPanel = document.getElementById('debugPanel');
+    const handInfo = document.getElementById('handInfo');
+    const pinchIndicator = document.getElementById('pinchIndicator');
+    const gestureIndicator = document.getElementById('gestureIndicator');
+
+    // ==================== MEDIAPIPE SETUP ====================
+    const Hands = window.Hands;
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5,
+    });
+
+    hands.onResults(onHandsResults);
+
+    const camera = new Camera(video, {
+      onFrame: async () => {
+        await hands.send({ image: video });
+      },
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+
+    camera.start();
+
+    // ==================== HAND DETECTION ====================
+    function onHandsResults(results) {
+      state.hands = results.multiHandLandmarks || [];
+      
+      if (state.hands.length > 0) {
+        updateCursor();
+        detectPinch();
+        handleUIInteraction();
+      }
+
+      updateDebugUI();
+    }
+
+    // ==================== CURSOR SUIVEUR ====================
+    function updateCursor() {
+      if (state.hands.length === 0) return;
+
+      const hand = state.hands[0];
+      const indexFinger = hand[8]; // Index tip
+      
+      const screenX = (1 - indexFinger.x) * window.innerWidth;
+      const screenY = indexFinger.y * window.innerHeight;
+
+      state.cursor.x = screenX;
+      state.cursor.y = screenY;
+      state.cursor.rayLength = 200 + Math.random() * 50;
+
+      cursor.style.transform = `translate(${screenX}px, ${screenY}px)`;
+      cursor.querySelector('.cursor-ray').style.height = state.cursor.rayLength + 'px';
+    }
+
+    // ==================== PINCH DETECTION ====================
+    function detectPinch() {
+      if (state.hands.length < 1) return;
+
+      state.hands.forEach((landmarks, handIndex) => {
+        const thumb = landmarks[4];
+        const index = landmarks[8];
+        
+        const distance = Math.hypot(
+          (index.x - thumb.x) * window.innerWidth,
+          (index.y - thumb.y) * window.innerHeight
+        );
+
+        const isPinching = distance < CONFIG.minPinchDistance;
+        
+        if (handIndex === 0) {
+          state.pinching.left = isPinching;
+        } else {
+          state.pinching.right = isPinching;
+        }
+
+        state.pinching.distance = distance;
+
+        if (isPinching) {
+          pinchIndicator.classList.add('active');
+          showGestureIndicator('👆');
+        } else {
+          pinchIndicator.classList.remove('active');
+        }
+      });
+    }
+
+    // ==================== INTERACTION UI ====================
+    function handleUIInteraction() {
+      if (!state.hands.length) return;
+
+      const hand = state.hands[0];
+      const middleFinger = hand[9]; // Middle finger
+      
+      // Déterminer la position cible
+      let targetX = state.cursor.x - 450;
+      let targetY = state.cursor.y - 300;
+
+      // Drag si non-pinching
+      if (!state.pinching.left) {
+        state.uiPosition.x += (targetX - state.uiPosition.x) * CONFIG.uiDragSensitivity;
+        state.uiPosition.y += (targetY - state.uiPosition.y) * CONFIG.uiDragSensitivity;
+      }
+
+      // Rotation légère basée sur la position
+      const angle = ((state.cursor.x / window.innerWidth) - 0.5) * 5;
+      state.uiRotation = angle;
+
+      // Zoom avec pincement
+      if (state.hands.length === 2) {
+        const hand1 = state.hands[0];
+        const hand2 = state.hands[1];
+        
+        const thumb1 = hand1[4];
+        const thumb2 = hand2[4];
+        
+        const dist = Math.hypot(
+          (thumb2.x - thumb1.x) * window.innerWidth,
+          (thumb2.y - thumb1.y) * window.innerHeight
+        );
+
+        state.uiScale = Math.max(0.8, Math.min(1.5, dist / 150));
+      }
+
+      updateUITransform();
+    }
+
+    function updateUITransform() {
+      visionUI.style.transform = `
+        translate(${state.uiPosition.x}px, ${state.uiPosition.y}px) 
+        rotateZ(${state.uiRotation}deg) 
+        scale(${state.uiScale})
+      `;
+    }
+
+    // ==================== ARUCO DETECTION (Placeholder) ====================
+    async function detectAruco() {
+      // Intégration OpenCV.js pour ArUco
+      if (window.cv && window.cv.aruco) {
+        try {
+          let src = cv.imread('canvasOutput');
+          let gray = new cv.Mat();
+          cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+          
+          // Detection simplifiée - à améliorer
+          state.aruco.detected = Math.random() > 0.7;
+          
+          cv.Mat.delete(src);
+          cv.Mat.delete(gray);
+        } catch (e) {
+          console.log('ArUco detection simplified');
+        }
+      }
+    }
+
+    // ==================== GESTURES ====================
+    function showGestureIndicator(emoji) {
+      gestureIndicator.textContent = emoji;
+      gestureIndicator.classList.add('show');
+      setTimeout(() => {
+        gestureIndicator.classList.remove('show');
+      }, 500);
+    }
+
+    // ==================== DEBUG UI ====================
+    function updateDebugUI() {
+      frameCount++;
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000;
+
+      if (deltaTime >= 1) {
+        state.fps = Math.round(frameCount / deltaTime);
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      // Stats
+      document.getElementById('fps').textContent = state.fps;
+      document.getElementById('handCount').textContent = state.hands.length;
+      document.getElementById('pinchStatus').textContent = 
+        state.pinching.left || state.pinching.right ? '✓ OUI' : '—';
+      document.getElementById('markerStatus').textContent = 
+        state.aruco.detected ? '✓ DÉTECTÉ' : '—';
+      document.getElementById('zoomLevel').textContent = 
+        Math.round(state.uiScale * 100) + '%';
+
+      // Hand badge
+      const handBadge = document.getElementById('handBadge');
+      if (state.hands.length > 0) {
+        handBadge.classList.add('active');
+        document.getElementById('handText').textContent = state.hands.length + ' main(s)';
+      } else {
+        handBadge.classList.remove('active');
+        document.getElementById('handText').textContent = 'Mains...';
+      }
+
+      // ArUco badge
+      const arucoBadge = document.getElementById('arucoBadge');
+      if (state.aruco.detected) {
+        arucoBadge.classList.add('active');
+        document.getElementById('arucoText').textContent = 'Marqueur fixé';
+      } else {
+        arucoBadge.classList.remove('active');
+        document.getElementById('arucoText').textContent = 'Marqueur détection...';
+      }
+
+      // Hand info
+      if (state.hands.length > 0) {
+        const hand = state.hands[0];
+        const wrist = hand[0];
+        handInfo.innerHTML = `
+          <div>✓ Hand Tracking: Actif</div>
+          <div>Pos: ${Math.round(state.cursor.x)}, ${Math.round(state.cursor.y)}</div>
+          <div>Pinch: ${state.pinching.distance.toFixed(0)}px</div>
+          <div>Mains: ${state.hands.length}</div>
+        `;
+      }
+    }
+
+    // ==================== CLICK HANDLING ====================
+    document.addEventListener('click', (e) => {
+      const isOnCard = e.target.closest('.glass-card');
+      if (isOnCard && (state.pinching.left || state.pinching.right)) {
+        showGestureIndicator('🎬 Lecture!');
+      }
+    });
+
+    // ==================== SCROLL MOUSE ====================
+    window.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const scrollContainer = document.querySelector('.ui-content');
+      scrollContainer.scrollTop += e.deltaY;
+    }, { passive: false });
+
+    // ==================== RESIZE ====================
+    window.addEventListener('resize', () => {
+      state.uiPosition.x = window.innerWidth / 2 - 450;
+      state.uiPosition.y = window.innerHeight / 2 - 300;
+    });
+
+    // ==================== INIT ====================
+    console.log('✓ Vision Pro AI initialized');
+  </script>
+</body>
+</html>

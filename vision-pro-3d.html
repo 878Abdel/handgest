@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vision Pro 3D - Advanced AR</title>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #000;
+    }
+
+    #videoFeed {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      transform: scaleX(-1);
+    }
+
+    #canvas3d {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 10;
+    }
+
+    #stats {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      font-family: 'Monaco', monospace;
+      font-size: 11px;
+      color: #64c8ff;
+      z-index: 99;
+      max-width: 300px;
+    }
+
+    .stat {
+      margin: 6px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #info {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid rgba(100, 200, 255, 0.3);
+      border-radius: 16px;
+      padding: 16px;
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      color: #64c8ff;
+      z-index: 99;
+    }
+
+    .gesture-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 64px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+
+    .gesture-indicator.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <video id="videoFeed" autoplay playsinline muted></video>
+  <canvas id="canvas3d"></canvas>
+
+  <div id="stats">
+    <div class="stat">
+      <span>FPS:</span>
+      <span id="fps">60</span>
+    </div>
+    <div class="stat">
+      <span>Hands:</span>
+      <span id="hands">0</span>
+    </div>
+    <div class="stat">
+      <span>Objects:</span>
+      <span id="objects">0</span>
+    </div>
+    <div class="stat">
+      <span>Pinch:</span>
+      <span id="pinch">—</span>
+    </div>
+  </div>
+
+  <div id="info">
+    3D Vision Pro Experience
+    <br/>Interact with hands and gestures
+  </div>
+
+  <div class="gesture-indicator" id="gesture">👆</div>
+
+  <script>
+    // ==================== THREE.JS SETUP ====================
+    const canvas = document.getElementById('canvas3d');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x000000, 0);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+    camera.position.z = 5;
+
+    // ==================== LIGHTS ====================
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0x64c8ff, 1, 100);
+    pointLight.position.set(5, 5, 5);
+    pointLight.castShadow = true;
+    scene.add(pointLight);
+
+    // ==================== 3D OBJECTS ====================
+    const objects = [];
+
+    // Create floating cubes
+    for (let i = 0; i < 5; i++) {
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      const material = new THREE.MeshPhongMaterial({
+        color: new THREE.Color().setHSL(i / 5, 0.8, 0.6),
+        emissive: new THREE.Color().setHSL(i / 5, 0.8, 0.3),
+        shininess: 100
+      });
+
+      const cube = new THREE.Mesh(geometry, material);
+      cube.position.set(
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10,
+        (Math.random() - 0.5) * 10
+      );
+      cube.castShadow = true;
+      cube.receiveShadow = true;
+      cube.userData.vx = (Math.random() - 0.5) * 0.05;
+      cube.userData.vy = (Math.random() - 0.5) * 0.05;
+      cube.userData.vz = (Math.random() - 0.5) * 0.05;
+
+      scene.add(cube);
+      objects.push(cube);
+    }
+
+    // ==================== PARTICLES ====================
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 100;
+    const positions = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+      positions[i] = (Math.random() - 0.5) * 20;
+      positions[i + 1] = (Math.random() - 0.5) * 20;
+      positions[i + 2] = (Math.random() - 0.5) * 20;
+    }
+
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+      color: 0x64c8ff,
+      size: 0.1,
+      sizeAttenuation: true
+    });
+
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particles);
+
+    // ==================== HAND TRACKING ====================
+    const video = document.getElementById('videoFeed');
+    const Hands = window.Hands;
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5,
+    });
+
+    let handData = [];
+    hands.onResults((results) => {
+      handData = results.multiHandLandmarks || [];
+      updateScene();
+    });
+
+    const camera2d = new Camera(video, {
+      onFrame: async () => {
+        await hands.send({ image: video });
+      },
+      width: window.innerWidth,
+      height: window.innerHeight,
+    });
+
+    camera2d.start();
+
+    // ==================== SCENE UPDATE ====================
+    function updateScene() {
+      // Auto-rotate objects
+      objects.forEach((obj) => {
+        obj.position.x += obj.userData.vx;
+        obj.position.y += obj.userData.vy;
+        obj.position.z += obj.userData.vz;
+
+        if (Math.abs(obj.position.x) > 10) obj.userData.vx *= -1;
+        if (Math.abs(obj.position.y) > 10) obj.userData.vy *= -1;
+        if (Math.abs(obj.position.z) > 10) obj.userData.vz *= -1;
+
+        obj.rotation.x += 0.005;
+        obj.rotation.y += 0.01;
+      });
+
+      // Rotate particles
+      particles.rotation.x += 0.0001;
+      particles.rotation.y += 0.0002;
+
+      // Hand interaction
+      if (handData.length > 0) {
+        const hand = handData[0];
+        const indexTip = hand[8];
+
+        // Map hand position to 3D space
+        const x = (indexTip.x - 0.5) * 10;
+        const y = -(indexTip.y - 0.5) * 10;
+        const z = -5 + indexTip.z * 5;
+
+        // Interact with objects
+        objects.forEach((obj) => {
+          const deltaX = obj.position.x - x;
+          const deltaY = obj.position.y - y;
+          const deltaZ = obj.position.z - z;
+          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+          if (distance < 2) {
+            obj.scale.lerp(new THREE.Vector3(1.2, 1.2, 1.2), 0.1);
+            obj.position.x += (deltaX / distance) * 0.05;
+            obj.position.y += (deltaY / distance) * 0.05;
+            obj.position.z += (deltaZ / distance) * 0.05;
+          } else {
+            obj.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+          }
+        });
+
+        // Move light to hand position
+        pointLight.position.set(x, y, z);
+      }
+    }
+
+    // ==================== RENDER LOOP ====================
+    let frameCount = 0;
+    let lastTime = Date.now();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      updateScene();
+      renderer.render(scene, camera);
+
+      // FPS calculation
+      frameCount++;
+      const now = Date.now();
+      const delta = (now - lastTime) / 1000;
+
+      if (delta >= 1) {
+        document.getElementById('fps').textContent = Math.round(frameCount / delta);
+        document.getElementById('hands').textContent = handData.length;
+        document.getElementById('objects').textContent = objects.length;
+        frameCount = 0;
+        lastTime = now;
+      }
+    }
+
+    animate();
+
+    // ==================== WINDOW EVENTS ====================
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    console.log('✨ Vision Pro 3D - Ready!');
+  </script>
+</body>
+</html>
